@@ -189,7 +189,7 @@ NotesLayer.displayName = "NotesLayer";
 interface TabLayerProps {
   tabLines: number[];
   showTab: boolean;
-  tabPositions: Map<string, { stringIndex: number; fret: number }>;
+  tabPositions: Map<string, { strings: number[]; frets: number[] }>;
   noteEvents: NoteEvent[];
   tickToX: (tick: number) => number;
 }
@@ -207,10 +207,10 @@ const TabLayer = memo(({ tabLines, showTab, tabPositions, noteEvents, tickToX }:
           return null;
         }
         const x = tickToX(note.startTick);
-        const y = tabLines[position.stringIndex];
+        const y = tabLines[position.strings[0]];
         return (
           <text key={`tab-${note.id}`} x={x - 4} y={y + 4} className="tab-number">
-            {position.fret}
+            {position.frets[0]}
           </text>
         );
       })}
@@ -293,7 +293,7 @@ export const ScoreViewport = () => {
   const tabPositions = useMemo(() => {
     const ordered = [...noteEvents].sort((a, b) => a.startTick - b.startTick);
     return mapNotesToTabPositions(
-      ordered.map((note) => ({ id: note.id, pitchMidi: note.pitchMidi })),
+      ordered.map((note) => ({ id: note.id, pitchMidi: note.pitchMidi, startTick: note.startTick })),
       instrument
     );
   }, [instrument, noteEvents]);

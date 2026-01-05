@@ -3,7 +3,7 @@ import { toDurationTicks } from "./rhythm";
 
 export type StemDirection = "up" | "down";
 
-export type LayoutEvent = {
+export type LayoutCommon = {
   id: string;
   startTick: number;
   durationTicks: number;
@@ -15,11 +15,21 @@ export type LayoutEvent = {
   flags: number;
   isRest: boolean;
   tupletLabel?: string;
-  string?: number;
-  fret?: number;
-  pitch?: string;
   beamed: boolean;
 };
+
+export type LayoutRestEvent = LayoutCommon & {
+  isRest: true;
+};
+
+export type LayoutNoteEvent = LayoutCommon & {
+  isRest: false;
+  string: number;
+  fret: number;
+  pitch: string;
+};
+
+export type LayoutEvent = LayoutNoteEvent | LayoutRestEvent;
 
 export type BeamSegment = {
   level: number;
@@ -73,10 +83,7 @@ const NOTE_LETTER_INDEX: Record<string, number> = {
   B: 6,
 };
 
-const parsePitch = (pitch?: string): { letter: string; octave: number } | null => {
-  if (!pitch) {
-    return null;
-  }
+const parsePitch = (pitch: string): { letter: string; octave: number } | null => {
   const match = pitch.match(/^([A-G])(#|b)?(\d)$/);
   if (!match) {
     return null;
@@ -84,7 +91,7 @@ const parsePitch = (pitch?: string): { letter: string; octave: number } | null =
   return { letter: match[1], octave: Number(match[3]) };
 };
 
-const getStaffY = (pitch: string | undefined, options: LayoutOptions): number => {
+const getStaffY = (pitch: string, options: LayoutOptions): number => {
   const parsed = parsePitch(pitch);
   const bottomLineY = options.staffTop + options.staffLineSpacing * 4;
   if (!parsed) {
@@ -98,10 +105,16 @@ const getStaffY = (pitch: string | undefined, options: LayoutOptions): number =>
   return bottomLineY - diatonicSteps * (options.staffLineSpacing / 2);
 };
 
-const getTabY = (stringIndex: number | undefined, options: LayoutOptions): number => {
-  const clamped = Math.min(Math.max(stringIndex ?? 1, 1), 6);
+const getTabY = (stringIndex: number, options: LayoutOptions): number => {
+  const clamped = Math.min(Math.max(stringIndex, 1), 6);
   return options.tabTop + (clamped - 1) * options.tabLineSpacing;
 };
+
+const getRestStaffY = (options: LayoutOptions): number =>
+  options.staffTop + options.staffLineSpacing * 2;
+
+const getRestTabY = (options: LayoutOptions): number =>
+  options.tabTop + options.tabLineSpacing * 2;
 
 const getStemDirection = (staffY: number, options: LayoutOptions): StemDirection => {
   const middleLineY = options.staffTop + options.staffLineSpacing * 2;
@@ -320,11 +333,32 @@ export const computeLayout = (
 
     const x =
       options.xStart + (startTick / measureTicks) * options.measureWidth;
+    const flags = getFlagCountForTicks(durationTicks);
+    const tupletLabel = event.tuplet
+      ? `${event.tuplet.n}:${event.tuplet.inTimeOf}`
+      : undefined;
+
+    if (event.isRest) {
+      const staffY = getRestStaffY(options);
+      const tabY = getRestTabY(options);
+      return {
+        id: event.id,
+        startTick,
+        durationTicks,
+        x,
+        staffY,
+        tabY,
+        stemDirection: getStemDirection(staffY, options),
+        stemLength: options.stemLength,
+        flags,
+        isRest: true,
+        tupletLabel,
+        beamed: false,
+      };
+    }
+
     const staffY = getStaffY(event.pitch, options);
     const tabY = getTabY(event.string, options);
-    const stemDirection = getStemDirection(staffY, options);
-    const flags = getFlagCountForTicks(durationTicks);
-
     return {
       id: event.id,
       startTick,
@@ -332,11 +366,11 @@ export const computeLayout = (
       x,
       staffY,
       tabY,
-      stemDirection,
+      stemDirection: getStemDirection(staffY, options),
       stemLength: options.stemLength,
       flags,
-      isRest: event.isRest,
-      tupletLabel: event.tuplet ? `${event.tuplet.n}:${event.tuplet.inTimeOf}` : undefined,
+      isRest: false,
+      tupletLabel,
       string: event.string,
       fret: event.fret,
       pitch: event.pitch,

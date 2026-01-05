@@ -5,6 +5,13 @@ export type Tuplet = {
   inTimeOf: number;
 };
 
+export type RhythmEventBase = {
+  id: string;
+  baseDuration: BaseDuration;
+  dotted: boolean;
+  tuplet: Tuplet | null;
+};
+
 export type RhythmState = {
   baseDuration: BaseDuration;
   dotted: boolean;
@@ -12,17 +19,21 @@ export type RhythmState = {
   isRest: boolean;
 };
 
-export type RhythmEvent = {
-  id: string;
-  pitch?: string;
-  string?: number;
-  fret?: number;
-  baseDuration: BaseDuration;
-  dotted: boolean;
-  tuplet: Tuplet | null;
-  isRest: boolean;
-  voice?: number;
+export type RestEvent = RhythmEventBase & {
+  isRest: true;
 };
+
+export type NoteEvent = RhythmEventBase & {
+  isRest: false;
+  string: number;
+  fret: number;
+  pitch: string;
+};
+
+export type RhythmEvent = NoteEvent | RestEvent;
+
+export const isRestEvent = (event: RhythmEvent): event is RestEvent => event.isRest;
+export const isNoteEvent = (event: RhythmEvent): event is NoteEvent => !event.isRest;
 
 export type TimeSignature = {
   beats: number;

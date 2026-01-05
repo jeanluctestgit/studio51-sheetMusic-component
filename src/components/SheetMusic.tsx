@@ -20,6 +20,23 @@ const DURATION_OPTIONS: { value: BaseDuration; label: string }[] = [
 const TIME_SIGNATURE: TimeSignature = { beats: 4, beatUnit: 4 };
 const TICKS_PER_WHOLE = 1024;
 const DEFAULT_DURATION: BaseDuration = "1/4";
+const MEASURE_WIDTH = 200;
+const STAFF_TOP = 60;
+const STAFF_LINE_SPACING = 12;
+const TAB_TOP = 170;
+const TAB_LINE_SPACING = 10;
+const STEM_LENGTH = 30;
+const LAYOUT_CONFIG = {
+  timeSignature: TIME_SIGNATURE,
+  ticksPerWhole: TICKS_PER_WHOLE,
+  xStart: 80,
+  measureWidth: MEASURE_WIDTH,
+  staffTop: STAFF_TOP,
+  staffLineSpacing: STAFF_LINE_SPACING,
+  tabTop: TAB_TOP,
+  tabLineSpacing: TAB_LINE_SPACING,
+  stemLength: STEM_LENGTH,
+};
 
 const INITIAL_EVENTS: RhythmEvent[] = [
   {
@@ -206,21 +223,10 @@ const SheetMusic = () => {
     tuplet: null,
     isRest: false,
   });
-  const [debugEnabled] = useState(true);
+  const debugEnabled = true;
 
   const layout = useMemo(
-    () =>
-      computeLayout(events, {
-        timeSignature: TIME_SIGNATURE,
-        ticksPerWhole: TICKS_PER_WHOLE,
-        xStart: 80,
-        measureWidth: 200,
-        staffTop: 60,
-        staffLineSpacing: 12,
-        tabTop: 170,
-        tabLineSpacing: 10,
-        stemLength: 30,
-      }),
+    () => computeLayout(events, LAYOUT_CONFIG),
     [events]
   );
 
@@ -228,7 +234,7 @@ const SheetMusic = () => {
     2,
     Math.ceil(layout.totalTicks / layout.measureTicks)
   );
-  const staffWidth = measureCount * 200;
+  const staffWidth = measureCount * MEASURE_WIDTH;
 
   const activeEvent = useMemo(
     () => events.find((note) => note.id === activeEventId) ?? events[0] ?? null,
@@ -300,7 +306,9 @@ const SheetMusic = () => {
   }, []);
 
   const updateRhythmState = useCallback(
-    (update: Partial<RhythmState> | ((prev: RhythmState) => Partial<RhythmState>)) => {
+    (
+      update: Partial<RhythmState> | ((prev: RhythmState) => Partial<RhythmState>)
+    ) => {
       setRhythmState((prev) => {
         const patch = typeof update === "function" ? update(prev) : update;
         const next = { ...prev, ...patch } as RhythmState;
@@ -357,17 +365,7 @@ const SheetMusic = () => {
           };
 
       setEvents((prev) => {
-        const layoutEvents = computeLayout(prev, {
-          timeSignature: TIME_SIGNATURE,
-          ticksPerWhole: TICKS_PER_WHOLE,
-          xStart: 80,
-          measureWidth: 200,
-          staffTop: 60,
-          staffLineSpacing: 12,
-          tabTop: 170,
-          tabLineSpacing: 10,
-          stemLength: 30,
-        }).events;
+        const layoutEvents = computeLayout(prev, LAYOUT_CONFIG).events;
         const insertionIndex = layoutEvents.findIndex(
           (event) => event.startTick > slotTick
         );
@@ -411,8 +409,9 @@ const SheetMusic = () => {
     const slotsPerMeasure = TIME_SIGNATURE.beats;
     return Array.from({ length: measureCount * slotsPerMeasure }, (_, index) => {
       const tick = index * layout.ticksPerBeat;
-      const width = 200 / slotsPerMeasure;
-      const x = 80 + (tick / layout.measureTicks) * 200 + width / 2;
+      const width = MEASURE_WIDTH / slotsPerMeasure;
+      const x =
+        LAYOUT_CONFIG.xStart + (tick / layout.measureTicks) * MEASURE_WIDTH + width / 2;
       return {
         id: `slot-${index}`,
         tick,
@@ -455,6 +454,23 @@ const SheetMusic = () => {
       return acc;
     }, {});
   }, [layout.events]);
+
+  const rhythmEventsById = useMemo(() => {
+    return events.reduce<Record<string, RhythmEvent>>((acc, event) => {
+      acc[event.id] = event;
+      return acc;
+    }, {});
+  }, [events]);
+
+  const handleLayoutEventSelect = useCallback(
+    (eventId: string) => {
+      const original = rhythmEventsById[eventId];
+      if (original) {
+        handleEventSelect(original);
+      }
+    },
+    [handleEventSelect, rhythmEventsById]
+  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -575,9 +591,9 @@ const SheetMusic = () => {
             {Array.from({ length: measureCount + 1 }, (_, index) => (
               <line
                 key={`measure-${index}`}
-                x1={80 + index * 200}
+                x1={LAYOUT_CONFIG.xStart + index * MEASURE_WIDTH}
                 y1={50}
-                x2={80 + index * 200}
+                x2={LAYOUT_CONFIG.xStart + index * MEASURE_WIDTH}
                 y2={240}
               />
             ))}
@@ -587,10 +603,10 @@ const SheetMusic = () => {
             {Array.from({ length: 5 }, (_, line) => (
               <line
                 key={`staff-${line}`}
-                x1={80}
-                y1={60 + line * 12}
-                x2={80 + staffWidth}
-                y2={60 + line * 12}
+                x1={LAYOUT_CONFIG.xStart}
+                y1={STAFF_TOP + line * STAFF_LINE_SPACING}
+                x2={LAYOUT_CONFIG.xStart + staffWidth}
+                y2={STAFF_TOP + line * STAFF_LINE_SPACING}
               />
             ))}
             <text x={46} y={72} className="label">
@@ -602,10 +618,10 @@ const SheetMusic = () => {
             {Array.from({ length: 6 }, (_, line) => (
               <line
                 key={`tab-${line}`}
-                x1={80}
-                y1={170 + line * 10}
-                x2={80 + staffWidth}
-                y2={170 + line * 10}
+                x1={LAYOUT_CONFIG.xStart}
+                y1={TAB_TOP + line * TAB_LINE_SPACING}
+                x2={LAYOUT_CONFIG.xStart + staffWidth}
+                y2={TAB_TOP + line * TAB_LINE_SPACING}
               />
             ))}
             <text x={42} y={188} className="label">
@@ -664,18 +680,14 @@ const SheetMusic = () => {
                   data-id={baseEventId}
                   onClick={(eventClick) => {
                     eventClick.stopPropagation();
-                    const original = events.find((item) => item.id === baseEventId);
-                    if (original) {
-                      handleEventSelect(original);
-                    }
+                    handleLayoutEventSelect(baseEventId);
                   }}
                   onMouseEnter={() => setHoverEventId(baseEventId)}
                   onMouseLeave={() => setHoverEventId(null)}
                 >
                   <path
                     d={buildRestPath(
-                      events.find((item) => item.id === baseEventId)?.baseDuration ??
-                        DEFAULT_DURATION
+                      rhythmEventsById[baseEventId]?.baseDuration ?? DEFAULT_DURATION
                     )}
                     transform={`translate(${event.x}, ${event.staffY})`}
                     className="rest-body"
@@ -706,10 +718,7 @@ const SheetMusic = () => {
                 data-id={baseEventId}
                 onClick={(eventClick) => {
                   eventClick.stopPropagation();
-                  const original = events.find((item) => item.id === baseEventId);
-                  if (original) {
-                    handleEventSelect(original);
-                  }
+                  handleLayoutEventSelect(baseEventId);
                 }}
                 onMouseEnter={() => setHoverEventId(baseEventId)}
                 onMouseLeave={() => setHoverEventId(null)}
@@ -760,7 +769,8 @@ const SheetMusic = () => {
           {debugEnabled && (
             <g className="debug">
               <text x={80} y={40}>
-                {TIME_SIGNATURE.beats}/{TIME_SIGNATURE.beatUnit} • largeur mesure 200
+                {TIME_SIGNATURE.beats}/{TIME_SIGNATURE.beatUnit} • largeur mesure{" "}
+                {MEASURE_WIDTH}
               </text>
               {layout.beamGroups.map((group) => {
                 const groupEvents = group.eventIds

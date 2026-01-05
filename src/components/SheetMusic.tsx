@@ -268,17 +268,34 @@ const SheetMusic = () => {
 
   const applyRhythmToEvent = useCallback((eventId: string, next: RhythmState) => {
     setEvents((prev) =>
-      prev.map((event) =>
-        event.id === eventId
-          ? {
-              ...event,
-              baseDuration: next.baseDuration,
-              isRest: next.isRest,
-              dotted: next.dotted,
-              tuplet: next.tuplet,
-            }
-          : event
-      )
+      prev.map((event) => {
+        if (event.id !== eventId) {
+          return event;
+        }
+        const base = {
+          id: event.id,
+          baseDuration: next.baseDuration,
+          dotted: next.dotted,
+          tuplet: next.tuplet,
+        };
+        if (next.isRest) {
+          return { ...base, isRest: true };
+        }
+        if (event.isRest) {
+          return {
+            ...base,
+            isRest: false,
+            string: 1,
+            fret: 0,
+            pitch: "E4",
+          };
+        }
+        return {
+          ...event,
+          ...base,
+          isRest: false,
+        };
+      })
     );
   }, []);
 
@@ -323,16 +340,21 @@ const SheetMusic = () => {
 
   const handleSlotInsert = useCallback(
     (slotTick: number) => {
-      const newEvent: RhythmEvent = {
+      const baseEvent = {
         id: `event-${Date.now()}`,
-        string: 1,
-        fret: 0,
-        pitch: "E4",
         baseDuration: rhythmState.baseDuration ?? lastUsedDuration,
         dotted: rhythmState.dotted,
         tuplet: rhythmState.tuplet,
-        isRest: rhythmState.isRest,
       };
+      const newEvent: RhythmEvent = rhythmState.isRest
+        ? { ...baseEvent, isRest: true }
+        : {
+            ...baseEvent,
+            isRest: false,
+            string: 1,
+            fret: 0,
+            pitch: "E4",
+          };
 
       setEvents((prev) => {
         const layoutEvents = computeLayout(prev, {
@@ -709,7 +731,7 @@ const SheetMusic = () => {
                   )}
 
                 <text x={event.x} y={event.tabY + 4} className="tab-fret">
-                  {event.fret ?? 0}
+                  {event.fret}
                 </text>
                 <line
                   x1={event.x + (event.stemDirection === "up" ? 8 : -8)}
@@ -774,15 +796,17 @@ const SheetMusic = () => {
           </div>
           <div>
             <span className="panel__label">Corde</span>
-            <strong>{activeEvent?.string ?? "-"}</strong>
+            <strong>
+              {activeEvent && !activeEvent.isRest ? activeEvent.string : "-"}
+            </strong>
           </div>
           <div>
             <span className="panel__label">Case</span>
-            <strong>{activeEvent?.fret ?? "-"}</strong>
+            <strong>{activeEvent && !activeEvent.isRest ? activeEvent.fret : "-"}</strong>
           </div>
           <div>
             <span className="panel__label">Hauteur</span>
-            <strong>{activeEvent?.pitch ?? "-"}</strong>
+            <strong>{activeEvent && !activeEvent.isRest ? activeEvent.pitch : "-"}</strong>
           </div>
           <div>
             <span className="panel__label">Durée</span>

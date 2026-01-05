@@ -231,7 +231,7 @@ const SheetMusic = () => {
   const staffWidth = measureCount * 200;
 
   const activeEvent = useMemo(
-    () => events.find((note) => note.id === activeEventId) ?? null,
+    () => events.find((note) => note.id === activeEventId) ?? events[0] ?? null,
     [activeEventId, events]
   );
 
@@ -289,6 +289,9 @@ const SheetMusic = () => {
         const next = { ...prev, ...patch } as RhythmState;
         if (activeEventId) {
           applyRhythmToEvent(activeEventId, next);
+        }
+        if (patch.baseDuration) {
+          setLastUsedDuration(patch.baseDuration);
         }
         return next;
       });
@@ -365,10 +368,6 @@ const SheetMusic = () => {
       rhythmState.tuplet,
     ]
   );
-
-  if (!activeEvent) {
-    return null;
-  }
 
   const viewWidth = Math.max(640, staffWidth + 120);
 
@@ -772,33 +771,33 @@ const SheetMusic = () => {
         <div className="panel__details">
           <div>
             <span className="panel__label">Type</span>
-            <strong>{activeEvent.isRest ? "Silence" : "Note"}</strong>
+            <strong>{activeEvent ? (activeEvent.isRest ? "Silence" : "Note") : "-"}</strong>
           </div>
           <div>
             <span className="panel__label">Corde</span>
-            <strong>{activeEvent.string ?? "-"}</strong>
+            <strong>{activeEvent?.string ?? "-"}</strong>
           </div>
           <div>
             <span className="panel__label">Case</span>
-            <strong>{activeEvent.fret ?? "-"}</strong>
+            <strong>{activeEvent?.fret ?? "-"}</strong>
           </div>
           <div>
             <span className="panel__label">Hauteur</span>
-            <strong>{activeEvent.pitch ?? "-"}</strong>
+            <strong>{activeEvent?.pitch ?? "-"}</strong>
           </div>
           <div>
             <span className="panel__label">Durée</span>
             <strong>
               {formatDurationLabel(
-                activeEvent.baseDuration,
-                activeEvent.dotted,
-                activeEvent.tuplet
+                activeEvent?.baseDuration ?? rhythmState.baseDuration,
+                activeEvent?.dotted ?? rhythmState.dotted,
+                activeEvent?.tuplet ?? rhythmState.tuplet
               )}
             </strong>
           </div>
           <div>
             <span className="panel__label">Tuplet</span>
-            <strong>{getTupletLabel(activeEvent.tuplet)}</strong>
+            <strong>{getTupletLabel(activeEvent?.tuplet ?? rhythmState.tuplet)}</strong>
           </div>
         </div>
         <p className="panel__hint">

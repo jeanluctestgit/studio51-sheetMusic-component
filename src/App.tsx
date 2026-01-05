@@ -1,4 +1,4 @@
-import SheetMusic from "./components/SheetMusic.jsx";
+import SheetMusic from "./components/SheetMusic";
 
 const App = () => {
   return (
@@ -9,7 +9,7 @@ const App = () => {
           <h1>Partition & tablature interactive</h1>
           <p className="subtitle">
             Prototype inspiré Guitar Pro 8 : cliquez sur une note pour obtenir
-            l'information et survolez pour mettre en évidence la position.
+            l&apos;information et survolez pour mettre en évidence la position.
           </p>
         </div>
         <div className="badge">Vite + React</div>

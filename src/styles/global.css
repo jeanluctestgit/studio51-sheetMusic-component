@@ -158,31 +158,71 @@ body {
   letter-spacing: 0.08em;
 }
 
-.note circle {
-  fill: #493326;
-  transition: transform 0.2s ease, fill 0.2s ease;
+.note,
+.rest {
+  cursor: pointer;
 }
 
-.note line {
+.notehead {
+  fill: #493326;
+}
+
+.stem {
   stroke: #493326;
   stroke-width: 2;
-  transition: stroke 0.2s ease;
 }
 
-.rest rect {
-  fill: #493326;
-  transition: transform 0.2s ease, fill 0.2s ease;
+.beam {
+  stroke: #493326;
+  stroke-width: 5;
+  stroke-linecap: round;
 }
 
-.rest.is-hover rect,
-.rest.is-active rect {
+.flag {
+  fill: none;
+  stroke: #493326;
+  stroke-width: 2;
+}
+
+.rest-body {
+  fill: none;
+  stroke: #493326;
+  stroke-width: 2;
+}
+
+.rest-flag {
+  fill: none;
+  stroke: #493326;
+  stroke-width: 2;
+}
+
+.rest.is-hover .rest-body,
+.rest.is-active .rest-body,
+.note.is-hover .notehead,
+.note.is-active .notehead,
+.note.is-hover .stem,
+.note.is-active .stem,
+.note.is-hover .beam,
+.note.is-active .beam,
+.note.is-hover .flag,
+.note.is-active .flag {
+  stroke: #ce5a30;
   fill: #ce5a30;
-  transform: scale(1.08);
+}
+
+.rest.is-hover .rest-body,
+.rest.is-active .rest-body,
+.note.is-hover .notehead,
+.note.is-active .notehead {
+  transform: scale(1.06);
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 .note .tab-fret {
   font-size: 12px;
   fill: #4f4036;
+  text-anchor: middle;
 }
 
 .note.is-hover circle,
@@ -194,6 +234,59 @@ body {
 .note.is-hover line,
 .note.is-active line {
   stroke: #ce5a30;
+}
+
+.tab-fret,
+.tab-rest {
+  font-size: 12px;
+  fill: #4f4036;
+  text-anchor: middle;
+}
+
+.tab-stem {
+  stroke: #4f4036;
+}
+
+.slot {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.slot:hover {
+  fill: rgba(206, 90, 48, 0.08);
+}
+
+.measure-lines line {
+  stroke: #c9b6a4;
+  stroke-width: 1;
+}
+
+.tuplets line {
+  stroke: #7a5c3c;
+  stroke-width: 1.5;
+}
+
+.tuplets text {
+  fill: #7a5c3c;
+  font-size: 12px;
+  text-anchor: middle;
+}
+
+.debug-label {
+  font-size: 10px;
+  fill: #9b7e5f;
+  text-anchor: middle;
+}
+
+.debug text {
+  font-size: 11px;
+  fill: #9b7e5f;
+}
+
+.debug-group {
+  fill: rgba(206, 90, 48, 0.08);
+  stroke: rgba(206, 90, 48, 0.4);
+  stroke-width: 1;
 }
 
 .sheet__panel {

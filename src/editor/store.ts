@@ -28,6 +28,7 @@ const createId = () =>
 const buildInitialScore = (): Score => ({
   id: createId(),
   title: "Staff-first prototype",
+  tempoBpm: 120,
   timeSignature: { beats: 4, beatUnit: 4 },
   keySignature: "C",
   ticksPerWhole: TICKS_PER_WHOLE,
@@ -38,7 +39,7 @@ const buildInitialScore = (): Score => ({
       clef: "treble",
       instrumentId: "generic",
       showTab: false,
-      measures: Array.from({ length: 4 }, (_, index) => ({
+      measures: Array.from({ length: 2 }, (_, index) => ({
         id: createId(),
         index,
         voices: [
@@ -58,7 +59,11 @@ const loadInitialScore = () => {
     return buildInitialScore();
   }
   const parsed = JSON.parse(raw) as Score;
-  return parsed;
+  return {
+    ...buildInitialScore(),
+    ...parsed,
+    tempoBpm: parsed.tempoBpm ?? 120,
+  };
 };
 
 const cloneScore = (score: Score) => structuredClone(score);
@@ -400,7 +405,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
         ...track,
         instrumentId,
         clef: instrument.clef,
-        showTab: instrument.strings ? track.showTab : false,
+        showTab: instrument.strings ? true : false,
       }));
       set((prev) => ({
         ...applyHistory(prev, score),
@@ -463,11 +468,17 @@ export const useEditorStore = create<EditorState>((set, get) => {
           historyIndex,
         };
       }),
-    importScore: (score) =>
+    importScore: (score) => {
+      const normalized: Score = {
+        ...buildInitialScore(),
+        ...score,
+        tempoBpm: score.tempoBpm ?? 120,
+      };
       set((state) => ({
-        ...applyHistory(state, score),
-        selectedTrackId: score.tracks[0]?.id ?? "",
-      })),
+        ...applyHistory(state, normalized),
+        selectedTrackId: normalized.tracks[0]?.id ?? "",
+      }));
+    },
   };
 });
 

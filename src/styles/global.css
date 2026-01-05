@@ -172,6 +172,10 @@ select {
   stroke-width: 1;
 }
 
+.score-layer--overlay {
+  pointer-events: none;
+}
+
 .score-label {
   font-size: 12px;
   fill: #6c6a63;

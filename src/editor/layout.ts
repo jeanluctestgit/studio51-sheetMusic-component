@@ -18,10 +18,10 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
   staffLineSpacing: 12,
   tabTop: 170,
   tabLineSpacing: 10,
-  measureWidth: 220,
+  measureWidth: 260,
   marginLeft: 80,
   marginTop: 20,
-  measuresPerSystem: 4,
+  measuresPerSystem: 2,
 };
 
 const TREBLE_BOTTOM_LINE_MIDI = 64; // E4
@@ -39,6 +39,7 @@ export const createLayoutHelpers = (
   const ticksPerMeasure = measureTicks(timeSignature, ticksPerWhole);
   const { pitchToStaffStep, staffStepToPitch } = createStaffPositioning(getClefReference(clef));
   const bottomLineY = layout.staffTop + layout.staffLineSpacing * 4;
+  const staffLinePositions = Array.from({ length: 5 }, (_, index) => layout.staffTop + index * layout.staffLineSpacing);
 
   const tickToX = (tick: number) => {
     const measureIndex = Math.floor(tick / ticksPerMeasure);
@@ -63,6 +64,34 @@ export const createLayoutHelpers = (
     return staffStepToPitch(staffStep);
   };
 
+  const hitTest = (
+    x: number,
+    y: number,
+    tolerance: { x: number; y: number } = { x: 8, y: 8 }
+  ) => {
+    const relativeX = Math.max(0, x - layout.marginLeft);
+    const measureIndex = Math.max(0, Math.floor(relativeX / layout.measureWidth));
+    const offsetX = relativeX - measureIndex * layout.measureWidth;
+    const rawTick = (offsetX / layout.measureWidth) * ticksPerMeasure + measureIndex * ticksPerMeasure;
+    const tick = Math.max(0, Math.round(rawTick));
+
+    const staffLineIndex = staffLinePositions.reduce<number | null>((closest, lineY, index) => {
+      const distance = Math.abs(lineY - y);
+      if (distance <= tolerance.y && (closest === null || distance < Math.abs(staffLinePositions[closest] - y))) {
+        return index;
+      }
+      return closest;
+    }, null);
+
+    return {
+      measureIndex,
+      tick,
+      staffLine: staffLineIndex,
+      pitchMidi: yToPitch(y),
+      snappedX: tickToX(tick),
+    };
+  };
+
   return {
     ticksPerMeasure,
     tickToX,
@@ -70,5 +99,7 @@ export const createLayoutHelpers = (
     pitchToY,
     yToPitch,
     bottomLineY,
+    staffLinePositions,
+    hitTest,
   };
 };

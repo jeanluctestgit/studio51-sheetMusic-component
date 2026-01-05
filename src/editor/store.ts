@@ -16,6 +16,7 @@ import type {
 import { durationToTicks, measureTicks, TICKS_PER_WHOLE } from "../music/ticks";
 import { quantizeTick } from "../music/quantize";
 import { getInstrumentById } from "../music/instruments";
+import { buildExampleEvents } from "../music/examples";
 
 const STORAGE_KEY = "studio51-score";
 const HISTORY_LIMIT = 50;
@@ -25,33 +26,55 @@ const createId = () =>
     ? crypto.randomUUID()
     : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-const buildInitialScore = (): Score => ({
-  id: createId(),
-  title: "Staff-first prototype",
-  tempoBpm: 120,
-  timeSignature: { beats: 4, beatUnit: 4 },
-  keySignature: "C",
-  ticksPerWhole: TICKS_PER_WHOLE,
-  tracks: [
-    {
-      id: createId(),
-      name: "Generic",
-      clef: "treble",
-      instrumentId: "generic",
-      showTab: false,
-      measures: Array.from({ length: 2 }, (_, index) => ({
+const buildInitialScore = (): Score => {
+  const ticksPerWhole = TICKS_PER_WHOLE;
+  const timeSignature = { beats: 4, beatUnit: 4 };
+  const ticksPerMeasure = measureTicks(timeSignature, ticksPerWhole);
+  const exampleEvents = buildExampleEvents(createId, ticksPerWhole);
+
+  const measures = Array.from({ length: 2 }, (_, index) => ({
+    id: createId(),
+    index,
+    voices: [
+      {
         id: createId(),
-        index,
-        voices: [
-          {
-            id: createId(),
-            events: [],
-          },
-        ],
-      })),
-    },
-  ],
-});
+        events: [],
+      },
+    ],
+  }));
+
+  exampleEvents.forEach((event) => {
+    const measureIndex = Math.floor(event.startTick / ticksPerMeasure);
+    const measure = measures[measureIndex];
+    if (!measure) {
+      return;
+    }
+    measure.voices[0].events.push(event);
+  });
+
+  measures.forEach((measure) => {
+    measure.voices[0].events.sort((a, b) => a.startTick - b.startTick);
+  });
+
+  return {
+    id: createId(),
+    title: "Staff-first prototype",
+    tempoBpm: 120,
+    timeSignature,
+    keySignature: "C",
+    ticksPerWhole,
+    tracks: [
+      {
+        id: createId(),
+        name: "Guitar",
+        clef: "treble",
+        instrumentId: "guitar-standard",
+        showTab: true,
+        measures,
+      },
+    ],
+  };
+};
 
 const loadInitialScore = () => {
   const raw = localStorage.getItem(STORAGE_KEY);

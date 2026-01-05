@@ -1,23 +1,22 @@
-import SheetMusic from "./components/SheetMusic";
+import { EditorView } from "./components/EditorView";
 
 const App = () => {
   return (
-    <main className="page">
-      <header className="page__header">
+    <div className="app">
+      <header className="app__header">
         <div>
-          <p className="eyebrow">Studio51</p>
-          <h1>Partition & tablature interactive</h1>
-          <p className="subtitle">
-            Prototype inspiré Guitar Pro 8 : cliquez sur une note pour obtenir
-            l&apos;information et survolez pour mettre en évidence la position.
+          <p className="app__eyebrow">Studio51</p>
+          <h1>Éditeur de partitions staff-first</h1>
+          <p className="app__subtitle">
+            Source de vérité = partition. La tablature est dérivée via un mapping d&apos;instrument.
+            Cliquez pour placer des notes, glissez pour ajuster le pitch et utilisez la barre
+            d&apos;outils pour les durées, articulations et effets.
           </p>
         </div>
-        <div className="badge">Vite + React</div>
+        <div className="app__badge">Vite + React + SVG</div>
       </header>
-      <section className="card">
-        <SheetMusic />
-      </section>
-    </main>
+      <EditorView />
+    </div>
   );
 };
 

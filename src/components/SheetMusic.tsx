@@ -261,9 +261,9 @@ const SheetMusic = () => {
         tuplet: event.tuplet,
         isRest: event.isRest,
       });
-      setLastUsedDuration(event.baseDuration ?? lastUsedDuration);
+      setLastUsedDuration(event.baseDuration);
     },
-    [lastUsedDuration]
+    []
   );
 
   const applyRhythmToEvent = useCallback((eventId: string, next: RhythmState) => {
@@ -302,7 +302,6 @@ const SheetMusic = () => {
   const handleDurationSelect = useCallback(
     (duration: BaseDuration) => {
       updateRhythmState({ baseDuration: duration });
-      setLastUsedDuration(duration);
     },
     [updateRhythmState]
   );

@@ -1,5 +1,5 @@
 import type { RhythmEvent, TimeSignature } from "./types";
-import { getFlagCount, toDurationTicks } from "./rhythm";
+import { toDurationTicks } from "./rhythm";
 
 export type StemDirection = "up" | "down";
 
@@ -296,6 +296,18 @@ export const computeLayout = (
   const ticksPerBeat = ticksPerWhole / options.timeSignature.beatUnit;
 
   let cumulativeTicks = 0;
+  const getFlagCountForTicks = (durationTicks: number): number => {
+    if (durationTicks <= ticksPerWhole / 32) {
+      return 3;
+    }
+    if (durationTicks <= ticksPerWhole / 16) {
+      return 2;
+    }
+    if (durationTicks < ticksPerWhole / 4) {
+      return 1;
+    }
+    return 0;
+  };
   const layoutEvents: LayoutEvent[] = events.map((event) => {
     const durationTicks = toDurationTicks(
       event.baseDuration,
@@ -311,7 +323,7 @@ export const computeLayout = (
     const staffY = getStaffY(event.pitch, options);
     const tabY = getTabY(event.string, options);
     const stemDirection = getStemDirection(staffY, options);
-    const flags = getFlagCount(event.baseDuration);
+    const flags = getFlagCountForTicks(durationTicks);
 
     return {
       id: event.id,

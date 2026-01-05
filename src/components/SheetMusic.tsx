@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BaseDuration, RhythmEvent, RhythmState, TimeSignature } from "../utils/types";
 import {
   TUPLET_PRESETS,
@@ -125,8 +125,9 @@ const getRhythmDebugLabel = ({ baseDuration, dotted, tuplet }: RhythmState) => {
   return parts.join(" • ");
 };
 
-const buildRestPath = (baseDuration: BaseDuration) => {
-  switch (baseDuration) {
+const buildRestPath = (baseDuration?: BaseDuration) => {
+  const resolved = baseDuration ?? DEFAULT_DURATION;
+  switch (resolved) {
     case "1/1":
       return "M -6 0 H 6 V 6 H -6 Z";
     case "1/2":
@@ -166,12 +167,14 @@ const renderRestFlags = (
   const spacing = 6;
   return Array.from({ length: count }, (_, index) => {
     const offset = index * spacing * (direction === "up" ? 1 : -1);
+    const sweepX = direction === "up" ? 8 : -8;
+    const sweepY = direction === "up" ? 4 : -4;
+    const endX = direction === "up" ? 4 : -4;
+    const endY = direction === "up" ? 12 : -12;
     return (
       <path
         key={`rest-flag-${index}`}
-        d={`M ${x} ${y + offset} q ${direction === "up" ? 8 : -8} ${
-          direction === "up" ? 4 : -4
-        } ${direction === "up" ? 4 : -4} ${direction === "up" ? 12 : -12}`}
+        d={`M ${x} ${y + offset} q ${sweepX} ${sweepY} ${endX} ${endY}`}
         className="rest-flag"
       />
     );
@@ -228,26 +231,42 @@ const SheetMusic = () => {
   const staffWidth = measureCount * 200;
 
   const activeEvent = useMemo(
-    () => events.find((note) => note.id === activeEventId) ?? events[0],
+    () => events.find((note) => note.id === activeEventId) ?? null,
     [activeEventId, events]
   );
 
-  if (!activeEvent) {
-    return null;
-  }
+  useEffect(() => {
+    if (events.length === 0) {
+      return;
+    }
+    if (!activeEventId || !events.some((event) => event.id === activeEventId)) {
+      const next = events[0];
+      setActiveEventId(next.id);
+      setRhythmState({
+        baseDuration: next.baseDuration,
+        dotted: next.dotted,
+        tuplet: next.tuplet,
+        isRest: next.isRest,
+      });
+      setLastUsedDuration(next.baseDuration);
+    }
+  }, [activeEventId, events]);
 
-  const handleEventSelect = (event: RhythmEvent) => {
-    setActiveEventId(event.id);
-    setRhythmState({
-      baseDuration: event.baseDuration,
-      dotted: event.dotted,
-      tuplet: event.tuplet,
-      isRest: event.isRest,
-    });
-    setLastUsedDuration(event.baseDuration ?? lastUsedDuration);
-  };
+  const handleEventSelect = useCallback(
+    (event: RhythmEvent) => {
+      setActiveEventId(event.id);
+      setRhythmState({
+        baseDuration: event.baseDuration,
+        dotted: event.dotted,
+        tuplet: event.tuplet,
+        isRest: event.isRest,
+      });
+      setLastUsedDuration(event.baseDuration ?? lastUsedDuration);
+    },
+    [lastUsedDuration]
+  );
 
-  const applyRhythmToEvent = (eventId: string, next: RhythmState) => {
+  const applyRhythmToEvent = useCallback((eventId: string, next: RhythmState) => {
     setEvents((prev) =>
       prev.map((event) =>
         event.id === eventId
@@ -261,71 +280,97 @@ const SheetMusic = () => {
           : event
       )
     );
-  };
+  }, []);
 
-  const updateRhythmState = (update: Partial<RhythmState>) => {
-    setRhythmState((prev) => {
-      const next = { ...prev, ...update } as RhythmState;
-      if (activeEventId) {
-        applyRhythmToEvent(activeEventId, next);
-      }
-      return next;
-    });
-  };
+  const updateRhythmState = useCallback(
+    (update: Partial<RhythmState> | ((prev: RhythmState) => Partial<RhythmState>)) => {
+      setRhythmState((prev) => {
+        const patch = typeof update === "function" ? update(prev) : update;
+        const next = { ...prev, ...patch } as RhythmState;
+        if (activeEventId) {
+          applyRhythmToEvent(activeEventId, next);
+        }
+        return next;
+      });
+    },
+    [activeEventId, applyRhythmToEvent]
+  );
 
-  const handleDurationSelect = (duration: BaseDuration) => {
-    updateRhythmState({ baseDuration: duration });
-    setLastUsedDuration(duration);
-  };
+  const handleDurationSelect = useCallback(
+    (duration: BaseDuration) => {
+      updateRhythmState({ baseDuration: duration });
+      setLastUsedDuration(duration);
+    },
+    [updateRhythmState]
+  );
 
-  const handleRestToggle = () => {
-    updateRhythmState({ isRest: !rhythmState.isRest });
-  };
+  const handleRestToggle = useCallback(() => {
+    updateRhythmState((prev) => ({ isRest: !prev.isRest }));
+  }, [updateRhythmState]);
 
-  const handleTupletToggle = (tuplet: RhythmState["tuplet"]) => {
-    const isSame =
-      rhythmState.tuplet?.n === tuplet?.n &&
-      rhythmState.tuplet?.inTimeOf === tuplet?.inTimeOf;
-    updateRhythmState({ tuplet: isSame ? null : tuplet });
-  };
+  const handleTupletToggle = useCallback(
+    (tuplet: RhythmState["tuplet"]) => {
+      updateRhythmState((prev) => {
+        const isSame =
+          prev.tuplet?.n === tuplet?.n && prev.tuplet?.inTimeOf === tuplet?.inTimeOf;
+        return { tuplet: isSame ? null : tuplet };
+      });
+    },
+    [updateRhythmState]
+  );
 
-  const handleSlotInsert = (slotTick: number) => {
-    const newEvent: RhythmEvent = {
-      id: `event-${Date.now()}`,
-      string: 1,
-      fret: 0,
-      pitch: "E4",
-      baseDuration: rhythmState.baseDuration ?? lastUsedDuration,
-      dotted: rhythmState.dotted,
-      tuplet: rhythmState.tuplet,
-      isRest: rhythmState.isRest,
-    };
+  const handleSlotInsert = useCallback(
+    (slotTick: number) => {
+      const newEvent: RhythmEvent = {
+        id: `event-${Date.now()}`,
+        string: 1,
+        fret: 0,
+        pitch: "E4",
+        baseDuration: rhythmState.baseDuration ?? lastUsedDuration,
+        dotted: rhythmState.dotted,
+        tuplet: rhythmState.tuplet,
+        isRest: rhythmState.isRest,
+      };
 
-    setEvents((prev) => {
-      const layoutEvents = computeLayout(prev, {
-        timeSignature: TIME_SIGNATURE,
-        ticksPerWhole: TICKS_PER_WHOLE,
-        xStart: 80,
-        measureWidth: 200,
-        staffTop: 60,
-        staffLineSpacing: 12,
-        tabTop: 170,
-        tabLineSpacing: 10,
-        stemLength: 30,
-      }).events;
-      const insertionIndex = layoutEvents.findIndex(
-        (event) => event.startTick > slotTick
-      );
-      const next = [...prev];
-      if (insertionIndex === -1) {
-        next.push(newEvent);
-      } else {
-        next.splice(insertionIndex, 0, newEvent);
-      }
-      return next;
-    });
-    setActiveEventId(newEvent.id);
-  };
+      setEvents((prev) => {
+        const layoutEvents = computeLayout(prev, {
+          timeSignature: TIME_SIGNATURE,
+          ticksPerWhole: TICKS_PER_WHOLE,
+          xStart: 80,
+          measureWidth: 200,
+          staffTop: 60,
+          staffLineSpacing: 12,
+          tabTop: 170,
+          tabLineSpacing: 10,
+          stemLength: 30,
+        }).events;
+        const insertionIndex = layoutEvents.findIndex(
+          (event) => event.startTick > slotTick
+        );
+        const next = [...prev];
+        if (insertionIndex === -1) {
+          next.push(newEvent);
+        } else {
+          next.splice(insertionIndex, 0, newEvent);
+        }
+        return next;
+      });
+      setActiveEventId(newEvent.id);
+    },
+    [
+      lastUsedDuration,
+      rhythmState.baseDuration,
+      rhythmState.dotted,
+      rhythmState.isRest,
+      rhythmState.tuplet,
+    ]
+  );
+
+  if (!activeEvent) {
+    return null;
+  }
+
+  const viewWidth = Math.max(640, staffWidth + 120);
 
   const currentEffectiveDuration = useMemo(() => {
     const baseDuration = rhythmState.baseDuration ?? lastUsedDuration;
@@ -346,12 +391,13 @@ const SheetMusic = () => {
     const slotsPerMeasure = TIME_SIGNATURE.beats;
     return Array.from({ length: measureCount * slotsPerMeasure }, (_, index) => {
       const tick = index * layout.ticksPerBeat;
-      const x = 80 + (tick / layout.measureTicks) * 200;
+      const width = 200 / slotsPerMeasure;
+      const x = 80 + (tick / layout.measureTicks) * 200 + width / 2;
       return {
         id: `slot-${index}`,
         tick,
         x,
-        width: 200 / slotsPerMeasure,
+        width,
       };
     });
   }, [layout.measureTicks, layout.ticksPerBeat, measureCount]);
@@ -367,21 +413,15 @@ const SheetMusic = () => {
         if (!firstEvent) {
           return null;
         }
-        const baseY =
-          type === "staff" ? segment.y : getTabStemEnd(firstEvent);
-        const offset =
-          type === "staff"
-            ? 0
-            : firstEvent.stemDirection === "up"
-              ? -(segment.level - 1) * 6
-              : (segment.level - 1) * 6;
+        const stemDelta = getTabStemEnd(firstEvent) - getStemEnd(firstEvent);
+        const baseY = type === "staff" ? segment.y : segment.y + stemDelta;
         return (
           <line
             key={`${group.id}-${type}-${segment.level}-${segment.xStart}`}
             x1={segment.xStart}
-            y1={baseY + offset}
+            y1={baseY}
             x2={segment.xEnd}
-            y2={baseY + offset}
+            y2={baseY}
             className="beam"
           />
         );
@@ -425,27 +465,29 @@ const SheetMusic = () => {
 
       if (event.key === ".") {
         event.preventDefault();
-        updateRhythmState({ dotted: !rhythmState.dotted });
+        updateRhythmState((prev) => ({ dotted: !prev.dotted }));
         return;
       }
 
       if (event.key.toLowerCase() === "t") {
         event.preventDefault();
-        const presets = TUPLET_PRESETS;
-        const currentIndex = presets.findIndex(
-          (preset) =>
-            preset.n === rhythmState.tuplet?.n &&
-            preset.inTimeOf === rhythmState.tuplet?.inTimeOf
-        );
-        const nextIndex = currentIndex + 1;
-        const nextTuplet = presets[nextIndex] ?? null;
-        updateRhythmState({ tuplet: nextTuplet });
+        updateRhythmState((prev) => {
+          const presets = TUPLET_PRESETS;
+          const currentIndex = presets.findIndex(
+            (preset) =>
+              preset.n === prev.tuplet?.n &&
+              preset.inTimeOf === prev.tuplet?.inTimeOf
+          );
+          const nextIndex = currentIndex + 1;
+          const nextTuplet = presets[nextIndex] ?? null;
+          return { tuplet: nextTuplet };
+        });
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [rhythmState.dotted, rhythmState.tuplet]);
+  }, [handleDurationSelect, handleRestToggle, updateRhythmState]);
 
   return (
     <div className="sheet">
@@ -480,7 +522,7 @@ const SheetMusic = () => {
               type="button"
               className={`rhythm__button ${rhythmState.dotted ? "is-active" : ""}`}
               aria-pressed={rhythmState.dotted}
-              onClick={() => updateRhythmState({ dotted: !rhythmState.dotted })}
+              onClick={() => updateRhythmState((prev) => ({ dotted: !prev.dotted }))}
             >
               Point
             </button>
@@ -505,9 +547,9 @@ const SheetMusic = () => {
             </span>
           </div>
         </div>
-        <svg viewBox="0 0 640 320" role="img" aria-labelledby="sheet-title">
+        <svg viewBox={`0 0 ${viewWidth} 320`} role="img" aria-labelledby="sheet-title">
           <title id="sheet-title">Partition et tablature</title>
-          <rect x="20" y="24" width="600" height="250" rx="16" />
+          <rect x="20" y="24" width={viewWidth - 40} height="250" rx="16" />
 
           <g className="measure-lines">
             {Array.from({ length: measureCount + 1 }, (_, index) => (
@@ -641,10 +683,10 @@ const SheetMusic = () => {
                 className={`note ${isActive ? "is-active" : ""} ${
                   isHover ? "is-hover" : ""
                 }`}
-                  data-id={baseEventId}
+                data-id={baseEventId}
                 onClick={(eventClick) => {
                   eventClick.stopPropagation();
-                    const original = events.find((item) => item.id === baseEventId);
+                  const original = events.find((item) => item.id === baseEventId);
                   if (original) {
                     handleEventSelect(original);
                   }

@@ -73,6 +73,66 @@ body {
   border: 1px solid #efe4db;
 }
 
+.rhythm {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.rhythm__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rhythm__button {
+  border: 1px solid #e7d8cb;
+  background: #fff;
+  color: #3d2c22;
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 0.75rem;
+  display: grid;
+  gap: 4px;
+  min-width: 74px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.rhythm__button--rest {
+  min-width: 86px;
+}
+
+.rhythm__button.is-active {
+  background: #ce5a30;
+  border-color: #ce5a30;
+  color: #fff;
+}
+
+.rhythm__button:focus-visible {
+  outline: 3px solid rgba(206, 90, 48, 0.35);
+  outline-offset: 2px;
+}
+
+.rhythm__value {
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.rhythm__label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.rhythm__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.75rem;
+  color: #7a5c3c;
+}
+
 .sheet__canvas svg {
   width: 100%;
   height: auto;
@@ -107,6 +167,17 @@ body {
   stroke: #493326;
   stroke-width: 2;
   transition: stroke 0.2s ease;
+}
+
+.rest rect {
+  fill: #493326;
+  transition: transform 0.2s ease, fill 0.2s ease;
+}
+
+.rest.is-hover rect,
+.rest.is-active rect {
+  fill: #ce5a30;
+  transform: scale(1.08);
 }
 
 .note .tab-fret {

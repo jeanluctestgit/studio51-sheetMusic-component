@@ -1,6 +1,6 @@
 import type { DurationValue, TimeSignature } from "./types";
 
-export const TICKS_PER_WHOLE = 1024;
+export const TICKS_PER_WHOLE = 1920;
 
 export interface Tuplet {
   n: number;

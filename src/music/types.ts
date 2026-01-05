@@ -43,6 +43,7 @@ export type KeySignature =
 export interface Score {
   id: string;
   title: string;
+  tempoBpm: number;
   timeSignature: TimeSignature;
   keySignature: KeySignature;
   ticksPerWhole: number;

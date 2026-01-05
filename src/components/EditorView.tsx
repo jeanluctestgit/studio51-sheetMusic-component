@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useEditorStore } from "../editor/store";
-import { StaffView } from "../svg/StaffView";
+import { ScoreViewport } from "../svg/ScoreViewport";
 import { Toolbar } from "./Toolbar";
 import { Inspector } from "./Inspector";
 import { durationToTicks } from "../music/ticks";
@@ -18,6 +18,7 @@ export const EditorView = () => {
     selectedEventIds,
     undo,
     redo,
+    score,
   } = useEditorStore();
 
   useEffect(() => {
@@ -73,13 +74,23 @@ export const EditorView = () => {
       }
       if (event.key === "ArrowLeft") {
         event.preventDefault();
-        const ticks = durationToTicks(duration, dotted, triplet ? { n: 3, inTimeOf: 2 } : null, 1024);
+        const ticks = durationToTicks(
+          duration,
+          dotted,
+          triplet ? { n: 3, inTimeOf: 2 } : null,
+          score.ticksPerWhole
+        );
         moveSelected(-ticks, 0);
         return;
       }
       if (event.key === "ArrowRight") {
         event.preventDefault();
-        const ticks = durationToTicks(duration, dotted, triplet ? { n: 3, inTimeOf: 2 } : null, 1024);
+        const ticks = durationToTicks(
+          duration,
+          dotted,
+          triplet ? { n: 3, inTimeOf: 2 } : null,
+          score.ticksPerWhole
+        );
         moveSelected(ticks, 0);
       }
     };
@@ -98,13 +109,14 @@ export const EditorView = () => {
     setDuration,
     setTool,
     undo,
+    score,
   ]);
 
   return (
     <div className="editor-layout">
       <Toolbar />
       <main className="editor-main">
-        <StaffView />
+        <ScoreViewport />
       </main>
       <Inspector />
     </div>

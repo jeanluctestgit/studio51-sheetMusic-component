@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { quantizeTick } from "../src/music/quantize";
+import { quantizeTick } from "../src/music/pitchUtils";
 
-describe("quantizeTick", () => {
+describe("note insertion quantization", () => {
   test("snaps to nearest grid", () => {
-    expect(quantizeTick(130, 64)).toBe(128);
-    expect(quantizeTick(160, 64)).toBe(192);
+    expect(quantizeTick(122, 60)).toBe(120);
+    expect(quantizeTick(149, 60)).toBe(150);
   });
 });

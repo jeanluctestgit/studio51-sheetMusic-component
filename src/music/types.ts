@@ -40,6 +40,13 @@ export type KeySignature =
   | "Gb"
   | "Cb";
 
+export interface PerformanceHints {
+  string?: number;
+  fret?: number;
+  position?: number;
+  fingering?: string;
+}
+
 export interface Score {
   id: string;
   title: string;
@@ -71,7 +78,7 @@ export interface Voice {
 }
 
 export type ScoreEvent =
-  | NoteEvent
+  | MusicalEvent
   | RestEvent
   | ChordSymbolEvent
   | TimeSigChangeEvent
@@ -82,15 +89,14 @@ export interface BaseEvent {
   startTick: number;
 }
 
-export interface NoteEvent extends BaseEvent {
+export interface MusicalEvent extends BaseEvent {
   type: "note";
+  pitches: number[];
   durationTicks: number;
-  pitchMidi: number;
-  accidental?: "#" | "b" | "natural";
-  tie?: boolean;
   articulations: Articulation[];
   ornaments: Ornament[];
   effects: Effect[];
+  performanceHints: PerformanceHints;
 }
 
 export interface RestEvent extends BaseEvent {

@@ -4,7 +4,7 @@ import type {
   ChordSymbolEvent,
   Effect,
   KeySignature,
-  NoteEvent,
+  MusicalEvent,
   Ornament,
   RestEvent,
   Score,
@@ -17,14 +17,26 @@ import { durationToTicks, measureTicks, TICKS_PER_WHOLE } from "../music/ticks";
 import { quantizeTick } from "../music/quantize";
 import { getInstrumentById } from "../music/instruments";
 import { buildExampleEvents } from "../music/examples";
+import { createId } from "../utils/id";
+import { playScore, type PlaybackHandle } from "../playback/engine";
 
 const STORAGE_KEY = "studio51-score";
 const HISTORY_LIMIT = 50;
 
-const createId = () =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+interface CommandSnapshot {
+  score: Score;
+  caretTick: number;
+  selectedEventIds: string[];
+}
+
+interface EditorCommand {
+  id: string;
+  label: string;
+  before: CommandSnapshot;
+  after: CommandSnapshot;
+}
+
+const cloneScore = (score: Score) => structuredClone(score);
 
 const buildInitialScore = (): Score => {
   const ticksPerWhole = TICKS_PER_WHOLE;
@@ -32,7 +44,7 @@ const buildInitialScore = (): Score => {
   const ticksPerMeasure = measureTicks(timeSignature, ticksPerWhole);
   const exampleEvents = buildExampleEvents(createId, ticksPerWhole);
 
-  const measures = Array.from({ length: 2 }, (_, index) => ({
+  const measures = Array.from({ length: 4 }, (_, index) => ({
     id: createId(),
     index,
     voices: [
@@ -58,7 +70,7 @@ const buildInitialScore = (): Score => {
 
   return {
     id: createId(),
-    title: "Staff-first prototype",
+    title: "Studio51 MVP",
     tempoBpm: 120,
     timeSignature,
     keySignature: "C",
@@ -89,70 +101,31 @@ const loadInitialScore = () => {
   };
 };
 
-const cloneScore = (score: Score) => structuredClone(score);
+const snapshotFromState = (state: EditorState): CommandSnapshot => ({
+  score: cloneScore(state.score),
+  caretTick: state.caretTick,
+  selectedEventIds: [...state.selectedEventIds],
+});
 
-export interface EditorState {
-  score: Score;
-  history: Score[];
-  historyIndex: number;
-  activeTool: ToolId;
-  duration: "1/1" | "1/2" | "1/4" | "1/8" | "1/16" | "1/32";
-  dotted: boolean;
-  triplet: boolean;
-  caretTick: number;
-  selectedEventIds: string[];
-  selectedTrackId: string;
-  activeArticulations: Articulation[];
-  activeOrnaments: Ornament[];
-  activeEffects: Effect[];
-  activeScaleId: string | null;
-  scaleRootMidi: number;
-  setTool: (tool: ToolId) => void;
-  setDuration: (duration: EditorState["duration"]) => void;
-  toggleDotted: () => void;
-  toggleTriplet: () => void;
-  setCaretTick: (tick: number) => void;
-  setSelection: (ids: string[]) => void;
-  toggleSelection: (id: string) => void;
-  addNoteAt: (tick: number, pitchMidi: number) => void;
-  addRestAt: (tick: number) => void;
-  addChordSymbol: (tick: number, symbol: string) => void;
-  removeEvent: (id: string) => void;
-  moveSelected: (deltaTicks: number, deltaPitch: number) => void;
-  updateEvent: (event: ScoreEvent) => void;
-  setTimeSignature: (timeSignature: TimeSignature) => void;
-  setKeySignature: (keySignature: KeySignature) => void;
-  setTrackInstrument: (trackId: string, instrumentId: string) => void;
-  toggleTrackTab: (trackId: string) => void;
-  toggleArticulation: (value: Articulation) => void;
-  toggleOrnament: (value: Ornament) => void;
-  toggleEffect: (value: Effect) => void;
-  setScale: (scaleId: string | null) => void;
-  setScaleRoot: (midi: number) => void;
-  undo: () => void;
-  redo: () => void;
-  importScore: (score: Score) => void;
-}
-
-const applyHistory = (state: EditorState, score: Score): Pick<EditorState, "score" | "history" | "historyIndex"> => {
+const applyCommand = (state: EditorState, command: EditorCommand) => {
   const nextHistory = state.history.slice(0, state.historyIndex + 1);
-  nextHistory.push(cloneScore(score));
+  nextHistory.push(command);
   if (nextHistory.length > HISTORY_LIMIT) {
     nextHistory.shift();
   }
   return {
-    score,
+    score: command.after.score,
+    caretTick: command.after.caretTick,
+    selectedEventIds: command.after.selectedEventIds,
     history: nextHistory,
     historyIndex: nextHistory.length - 1,
   };
 };
 
-const updateTrack = (score: Score, trackId: string, updater: (track: Track) => Track) => {
-  return {
-    ...score,
-    tracks: score.tracks.map((track) => (track.id === trackId ? updater(track) : track)),
-  };
-};
+const updateTrack = (score: Score, trackId: string, updater: (track: Track) => Track) => ({
+  ...score,
+  tracks: score.tracks.map((track) => (track.id === trackId ? updater(track) : track)),
+});
 
 const insertEvent = (track: Track, event: ScoreEvent, ticksPerMeasure: number) => {
   const measureIndex = Math.floor(event.startTick / ticksPerMeasure);
@@ -209,12 +182,79 @@ const insertEvent = (track: Track, event: ScoreEvent, ticksPerMeasure: number) =
   };
 };
 
+export interface EditorState {
+  score: Score;
+  history: EditorCommand[];
+  historyIndex: number;
+  activeTool: ToolId;
+  duration: "1/1" | "1/2" | "1/4" | "1/8" | "1/16" | "1/32";
+  dotted: boolean;
+  triplet: boolean;
+  caretTick: number;
+  selectedEventIds: string[];
+  selectedTrackId: string;
+  activeArticulations: Articulation[];
+  activeOrnaments: Ornament[];
+  activeEffects: Effect[];
+  activeScaleId: string | null;
+  scaleRootMidi: number;
+  activeFret: number;
+  isPlaying: boolean;
+  playbackTick: number;
+  setTempoBpm: (tempo: number) => void;
+  setTool: (tool: ToolId) => void;
+  setDuration: (duration: EditorState["duration"]) => void;
+  toggleDotted: () => void;
+  toggleTriplet: () => void;
+  setCaretTick: (tick: number) => void;
+  setSelection: (ids: string[]) => void;
+  toggleSelection: (id: string) => void;
+  addNoteAt: (payload: { tick: number; pitchMidi: number; performanceHints?: { string?: number; fret?: number } }) => void;
+  addRestAt: (tick: number) => void;
+  addChordSymbol: (tick: number, symbol: string) => void;
+  removeEvent: (id: string) => void;
+  moveSelected: (deltaTicks: number, deltaPitch: number) => void;
+  updateEvent: (event: ScoreEvent) => void;
+  setTimeSignature: (timeSignature: TimeSignature) => void;
+  setKeySignature: (keySignature: KeySignature) => void;
+  setTrackInstrument: (trackId: string, instrumentId: string) => void;
+  toggleTrackTab: (trackId: string) => void;
+  toggleArticulation: (value: Articulation) => void;
+  toggleOrnament: (value: Ornament) => void;
+  toggleEffect: (value: Effect) => void;
+  setScale: (scaleId: string | null) => void;
+  setScaleRoot: (midi: number) => void;
+  setActiveFret: (fret: number) => void;
+  undo: () => void;
+  redo: () => void;
+  importScore: (score: Score) => void;
+  play: () => void;
+  stop: () => void;
+}
+
+let playbackHandle: PlaybackHandle | null = null;
+
 export const useEditorStore = create<EditorState>((set, get) => {
   const initialScore = loadInitialScore();
 
   return {
     score: initialScore,
-    history: [cloneScore(initialScore)],
+    history: [
+      {
+        id: createId(),
+        label: "Initial",
+        before: {
+          score: cloneScore(initialScore),
+          caretTick: 0,
+          selectedEventIds: [],
+        },
+        after: {
+          score: cloneScore(initialScore),
+          caretTick: 0,
+          selectedEventIds: [],
+        },
+      },
+    ],
     historyIndex: 0,
     activeTool: "select",
     duration: "1/4",
@@ -228,6 +268,29 @@ export const useEditorStore = create<EditorState>((set, get) => {
     activeEffects: [],
     activeScaleId: null,
     scaleRootMidi: 60,
+    activeFret: 3,
+    isPlaying: false,
+    playbackTick: 0,
+    setTempoBpm: (tempo) => {
+      const state = get();
+      const nextTempo = Number.isFinite(tempo) ? Math.max(20, Math.min(260, tempo)) : state.score.tempoBpm;
+      const score = { ...state.score, tempoBpm: nextTempo };
+      const before = snapshotFromState(state);
+      const after = {
+        score: cloneScore(score),
+        caretTick: state.caretTick,
+        selectedEventIds: [...state.selectedEventIds],
+      };
+      const command: EditorCommand = {
+        id: createId(),
+        label: "Tempo",
+        before,
+        after,
+      };
+      set((prev) => ({
+        ...applyCommand(prev, command),
+      }));
+    },
     setTool: (tool) => set({ activeTool: tool }),
     setDuration: (duration) => set({ duration }),
     toggleDotted: () => set((state) => ({ dotted: !state.dotted })),
@@ -240,7 +303,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
           ? state.selectedEventIds.filter((item) => item !== id)
           : [...state.selectedEventIds, id],
       })),
-    addNoteAt: (tick, pitchMidi) => {
+    addNoteAt: ({ tick, pitchMidi, performanceHints }) => {
       const state = get();
       const ticksPerMeasure = measureTicks(state.score.timeSignature, state.score.ticksPerWhole);
       const durationTicks = durationToTicks(
@@ -250,24 +313,35 @@ export const useEditorStore = create<EditorState>((set, get) => {
         state.score.ticksPerWhole
       );
       const quantized = quantizeTick(tick, durationTicks);
-      const note: NoteEvent = {
+      const note: MusicalEvent = {
         id: createId(),
         type: "note",
         startTick: quantized,
         durationTicks,
-        pitchMidi,
+        pitches: [pitchMidi],
         articulations: [...state.activeArticulations],
         ornaments: [...state.activeOrnaments],
         effects: [...state.activeEffects],
+        performanceHints: performanceHints ?? {},
       };
 
       const score = updateTrack(state.score, state.selectedTrackId, (track) =>
         insertEvent(track, note, ticksPerMeasure)
       );
-      set((prev) => ({
-        ...applyHistory(prev, score),
+      const before = snapshotFromState(state);
+      const after = {
+        score: cloneScore(score),
         caretTick: quantized + durationTicks,
         selectedEventIds: [note.id],
+      };
+      const command: EditorCommand = {
+        id: createId(),
+        label: "Add note",
+        before,
+        after,
+      };
+      set((prev) => ({
+        ...applyCommand(prev, command),
       }));
     },
     addRestAt: (tick) => {
@@ -290,10 +364,20 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const score = updateTrack(state.score, state.selectedTrackId, (track) =>
         insertEvent(track, rest, ticksPerMeasure)
       );
-      set((prev) => ({
-        ...applyHistory(prev, score),
+      const before = snapshotFromState(state);
+      const after = {
+        score: cloneScore(score),
         caretTick: quantized + durationTicks,
         selectedEventIds: [rest.id],
+      };
+      const command: EditorCommand = {
+        id: createId(),
+        label: "Add rest",
+        before,
+        after,
+      };
+      set((prev) => ({
+        ...applyCommand(prev, command),
       }));
     },
     addChordSymbol: (tick, symbol) => {
@@ -311,9 +395,20 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const score = updateTrack(state.score, state.selectedTrackId, (track) =>
         insertEvent(track, chord, ticksPerMeasure)
       );
-      set((prev) => ({
-        ...applyHistory(prev, score),
+      const before = snapshotFromState(state);
+      const after = {
+        score: cloneScore(score),
+        caretTick: state.caretTick,
         selectedEventIds: [chord.id],
+      };
+      const command: EditorCommand = {
+        id: createId(),
+        label: "Add chord",
+        before,
+        after,
+      };
+      set((prev) => ({
+        ...applyCommand(prev, command),
       }));
     },
     removeEvent: (id) => {
@@ -332,9 +427,20 @@ export const useEditorStore = create<EditorState>((set, get) => {
           ),
         })),
       }));
+      const before = snapshotFromState(state);
+      const after = {
+        score: cloneScore(score),
+        caretTick: state.caretTick,
+        selectedEventIds: state.selectedEventIds.filter((selected) => selected !== id),
+      };
+      const command: EditorCommand = {
+        id: createId(),
+        label: "Remove event",
+        before,
+        after,
+      };
       set((prev) => ({
-        ...applyHistory(prev, score),
-        selectedEventIds: prev.selectedEventIds.filter((selected) => selected !== id),
+        ...applyCommand(prev, command),
       }));
     },
     moveSelected: (deltaTicks, deltaPitch) => {
@@ -367,7 +473,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
                       return {
                         ...event,
                         startTick: Math.max(0, nextTick),
-                        pitchMidi: event.pitchMidi + deltaPitch,
+                        pitches: event.pitches.map((pitch) => pitch + deltaPitch),
                       };
                     }
                     if (event.type === "rest") {
@@ -381,9 +487,20 @@ export const useEditorStore = create<EditorState>((set, get) => {
         })),
       }));
 
-      set((prev) => ({
-        ...applyHistory(prev, score),
+      const before = snapshotFromState(state);
+      const after = {
+        score: cloneScore(score),
         caretTick: Math.max(0, state.caretTick + deltaTicks),
+        selectedEventIds: [...state.selectedEventIds],
+      };
+      const command: EditorCommand = {
+        id: createId(),
+        label: "Move event",
+        before,
+        after,
+      };
+      set((prev) => ({
+        ...applyCommand(prev, command),
       }));
     },
     updateEvent: (event) => {
@@ -403,22 +520,58 @@ export const useEditorStore = create<EditorState>((set, get) => {
         })),
       }));
 
+      const before = snapshotFromState(state);
+      const after = {
+        score: cloneScore(score),
+        caretTick: state.caretTick,
+        selectedEventIds: [...state.selectedEventIds],
+      };
+      const command: EditorCommand = {
+        id: createId(),
+        label: "Update event",
+        before,
+        after,
+      };
       set((prev) => ({
-        ...applyHistory(prev, score),
+        ...applyCommand(prev, command),
       }));
     },
     setTimeSignature: (timeSignature) => {
       const state = get();
       const score = { ...state.score, timeSignature };
+      const before = snapshotFromState(state);
+      const after = {
+        score: cloneScore(score),
+        caretTick: state.caretTick,
+        selectedEventIds: [...state.selectedEventIds],
+      };
+      const command: EditorCommand = {
+        id: createId(),
+        label: "Time signature",
+        before,
+        after,
+      };
       set((prev) => ({
-        ...applyHistory(prev, score),
+        ...applyCommand(prev, command),
       }));
     },
     setKeySignature: (keySignature) => {
       const state = get();
       const score = { ...state.score, keySignature };
+      const before = snapshotFromState(state);
+      const after = {
+        score: cloneScore(score),
+        caretTick: state.caretTick,
+        selectedEventIds: [...state.selectedEventIds],
+      };
+      const command: EditorCommand = {
+        id: createId(),
+        label: "Key signature",
+        before,
+        after,
+      };
       set((prev) => ({
-        ...applyHistory(prev, score),
+        ...applyCommand(prev, command),
       }));
     },
     setTrackInstrument: (trackId, instrumentId) => {
@@ -430,8 +583,20 @@ export const useEditorStore = create<EditorState>((set, get) => {
         clef: instrument.clef,
         showTab: instrument.strings ? true : false,
       }));
+      const before = snapshotFromState(state);
+      const after = {
+        score: cloneScore(score),
+        caretTick: state.caretTick,
+        selectedEventIds: [...state.selectedEventIds],
+      };
+      const command: EditorCommand = {
+        id: createId(),
+        label: "Change instrument",
+        before,
+        after,
+      };
       set((prev) => ({
-        ...applyHistory(prev, score),
+        ...applyCommand(prev, command),
       }));
     },
     toggleTrackTab: (trackId) => {
@@ -443,8 +608,20 @@ export const useEditorStore = create<EditorState>((set, get) => {
         }
         return { ...track, showTab: !track.showTab };
       });
+      const before = snapshotFromState(state);
+      const after = {
+        score: cloneScore(score),
+        caretTick: state.caretTick,
+        selectedEventIds: [...state.selectedEventIds],
+      };
+      const command: EditorCommand = {
+        id: createId(),
+        label: "Toggle tab",
+        before,
+        after,
+      };
       set((prev) => ({
-        ...applyHistory(prev, score),
+        ...applyCommand(prev, command),
       }));
     },
     toggleArticulation: (value) =>
@@ -467,16 +644,19 @@ export const useEditorStore = create<EditorState>((set, get) => {
       })),
     setScale: (scaleId) => set({ activeScaleId: scaleId }),
     setScaleRoot: (midi) => set({ scaleRootMidi: midi }),
+    setActiveFret: (fret) => set({ activeFret: Math.max(0, Math.min(24, fret)) }),
     undo: () =>
       set((state) => {
         if (state.historyIndex <= 0) {
           return state;
         }
-        const historyIndex = state.historyIndex - 1;
+        const command = state.history[state.historyIndex];
         return {
           ...state,
-          score: cloneScore(state.history[historyIndex]),
-          historyIndex,
+          score: cloneScore(command.before.score),
+          caretTick: command.before.caretTick,
+          selectedEventIds: [...command.before.selectedEventIds],
+          historyIndex: state.historyIndex - 1,
         };
       }),
     redo: () =>
@@ -484,11 +664,14 @@ export const useEditorStore = create<EditorState>((set, get) => {
         if (state.historyIndex >= state.history.length - 1) {
           return state;
         }
-        const historyIndex = state.historyIndex + 1;
+        const nextIndex = state.historyIndex + 1;
+        const command = state.history[nextIndex];
         return {
           ...state,
-          score: cloneScore(state.history[historyIndex]),
-          historyIndex,
+          score: cloneScore(command.after.score),
+          caretTick: command.after.caretTick,
+          selectedEventIds: [...command.after.selectedEventIds],
+          historyIndex: nextIndex,
         };
       }),
     importScore: (score) => {
@@ -498,13 +681,45 @@ export const useEditorStore = create<EditorState>((set, get) => {
         tempoBpm: score.tempoBpm ?? 120,
       };
       set((state) => ({
-        ...applyHistory(state, normalized),
+        ...applyCommand(state, {
+          id: createId(),
+          label: "Import score",
+          before: snapshotFromState(state),
+          after: {
+            score: cloneScore(normalized),
+            caretTick: 0,
+            selectedEventIds: [],
+          },
+        }),
         selectedTrackId: normalized.tracks[0]?.id ?? "",
       }));
+    },
+    play: () => {
+      const state = get();
+      if (state.isPlaying) {
+        return;
+      }
+      playbackHandle?.stop();
+      set({ isPlaying: true, playbackTick: state.caretTick });
+      playbackHandle = playScore({
+        score: state.score,
+        trackId: state.selectedTrackId,
+        startTick: state.caretTick,
+        onTick: (tick) => set({ playbackTick: tick }),
+        onStop: () => set({ isPlaying: false }),
+      });
+    },
+    stop: () => {
+      playbackHandle?.stop();
+      playbackHandle = null;
+      set((state) => ({ isPlaying: false, playbackTick: state.caretTick }));
     },
   };
 });
 
-useEditorStore.subscribe((state) => state.score, (score) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(score));
-});
+useEditorStore.subscribe(
+  (state) => state.score,
+  (score) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(score));
+  }
+);

@@ -1,9 +1,10 @@
 import { useEffect } from "react";
-import { useEditorStore } from "../editor/store";
+import { useEditorStore } from "../state/editorStore";
 import { ScoreViewport } from "../svg/ScoreViewport";
 import { Toolbar } from "./Toolbar";
 import { Inspector } from "./Inspector";
 import { durationToTicks } from "../music/ticks";
+import styles from "../styles/EditorView.module.css";
 
 export const EditorView = () => {
   const {
@@ -19,6 +20,9 @@ export const EditorView = () => {
     undo,
     redo,
     score,
+    play,
+    stop,
+    isPlaying,
   } = useEditorStore();
 
   useEffect(() => {
@@ -35,6 +39,15 @@ export const EditorView = () => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
         event.preventDefault();
         redo();
+        return;
+      }
+      if (event.key === " ") {
+        event.preventDefault();
+        if (isPlaying) {
+          stop();
+        } else {
+          play();
+        }
         return;
       }
       if (event.key === "Delete" || event.key === "Backspace") {
@@ -110,12 +123,15 @@ export const EditorView = () => {
     setTool,
     undo,
     score,
+    play,
+    stop,
+    isPlaying,
   ]);
 
   return (
-    <div className="editor-layout">
+    <div className={styles.layout}>
       <Toolbar />
-      <main className="editor-main">
+      <main className={styles.main}>
         <ScoreViewport />
       </main>
       <Inspector />

@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react";
-import { useEditorStore } from "../editor/store";
+import { useEditorStore } from "../state/editorStore";
 import { getInstrumentById, INSTRUMENTS } from "../music/instruments";
-import type { Score } from "../music/types";
+import type { MusicalEvent, Score } from "../music/types";
+import { mapTabToPitch } from "../music/mapping";
+import styles from "../styles/Inspector.module.css";
+
+const stringifyPitches = (pitches: number[]) => pitches.join(", ");
 
 export const Inspector = () => {
   const {
@@ -11,6 +15,7 @@ export const Inspector = () => {
     setTrackInstrument,
     toggleTrackTab,
     importScore,
+    updateEvent,
   } = useEditorStore();
   const [importError, setImportError] = useState<string | null>(null);
 
@@ -22,6 +27,8 @@ export const Inspector = () => {
       measure.voices.flatMap((voice) => voice.events.filter((event) => selectedEventIds.includes(event.id)))
     );
   }, [track, selectedEventIds]);
+
+  const selectedNote = selectedEvents.find((event) => event.type === "note") as MusicalEvent | undefined;
 
   const downloadJson = () => {
     const blob = new Blob([JSON.stringify(score, null, 2)], { type: "application/json" });
@@ -50,9 +57,64 @@ export const Inspector = () => {
     reader.readAsText(file);
   };
 
+  const handlePitchChange = (value: string) => {
+    if (!selectedNote) {
+      return;
+    }
+    const pitch = Number(value);
+    if (Number.isNaN(pitch)) {
+      return;
+    }
+    updateEvent({
+      ...selectedNote,
+      pitches: [pitch],
+      performanceHints: {
+        ...selectedNote.performanceHints,
+      },
+    });
+  };
+
+  const handleDurationChange = (value: string) => {
+    if (!selectedNote) {
+      return;
+    }
+    const durationTicks = Number(value);
+    if (Number.isNaN(durationTicks)) {
+      return;
+    }
+    updateEvent({
+      ...selectedNote,
+      durationTicks: Math.max(1, durationTicks),
+    });
+  };
+
+  const handleStringFretChange = (stringValue: string, fretValue: string) => {
+    if (!selectedNote || !instrument.strings) {
+      return;
+    }
+    const stringIndex = Number(stringValue);
+    const fret = Number(fretValue);
+    if (Number.isNaN(stringIndex) || Number.isNaN(fret)) {
+      return;
+    }
+    const pitch = mapTabToPitch(stringIndex, fret, instrument);
+    if (pitch == null) {
+      return;
+    }
+    updateEvent({
+      ...selectedNote,
+      pitches: [pitch],
+      performanceHints: {
+        ...selectedNote.performanceHints,
+        string: stringIndex,
+        fret,
+      },
+    });
+  };
+
   return (
-    <aside className="inspector">
-      <section className="inspector__section">
+    <aside className={styles.inspector}>
+      <section className={styles.section}>
         <h2>Piste active</h2>
         <label>
           Instrument
@@ -68,46 +130,94 @@ export const Inspector = () => {
           </select>
         </label>
         {instrument.strings && (
-          <label className="inspector__toggle">
-            <input
-              type="checkbox"
-              checked={track.showTab}
-              onChange={() => toggleTrackTab(track.id)}
-            />
+          <label className={styles.toggle}>
+            <input type="checkbox" checked={track.showTab} onChange={() => toggleTrackTab(track.id)} />
             Afficher la tablature
           </label>
         )}
       </section>
 
-      <section className="inspector__section">
-        <h2>Sélection</h2>
-        {selectedEvents.length === 0 ? (
-          <p>Aucune note sélectionnée.</p>
+      <section className={styles.section}>
+        <h2>Note sélectionnée</h2>
+        {selectedNote ? (
+          <div className={styles.grid}>
+            <label>
+              Pitch (MIDI)
+              <input
+                type="number"
+                value={selectedNote.pitches[0] ?? 60}
+                onChange={(event) => handlePitchChange(event.target.value)}
+              />
+            </label>
+            <label>
+              Durée (ticks)
+              <input
+                type="number"
+                value={selectedNote.durationTicks}
+                onChange={(event) => handleDurationChange(event.target.value)}
+              />
+            </label>
+            <label>
+              Pitches
+              <input type="text" value={stringifyPitches(selectedNote.pitches)} readOnly />
+            </label>
+            {instrument.strings && (
+              <label>
+                String / Fret
+                <div className={styles.row}>
+                  <input
+                    type="number"
+                    min={0}
+                    max={(instrument.strings?.length ?? 1) - 1}
+                    value={selectedNote.performanceHints.string ?? 0}
+                    onChange={(event) =>
+                      handleStringFretChange(event.target.value, String(selectedNote.performanceHints.fret ?? 0))
+                    }
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    max={24}
+                    value={selectedNote.performanceHints.fret ?? 0}
+                    onChange={(event) =>
+                      handleStringFretChange(String(selectedNote.performanceHints.string ?? 0), event.target.value)
+                    }
+                  />
+                </div>
+              </label>
+            )}
+            <label>
+              Articulations
+              <span>{selectedNote.articulations.join(", ") || "Aucune"}</span>
+            </label>
+            <label>
+              Effets
+              <span>{selectedNote.effects.join(", ") || "Aucun"}</span>
+            </label>
+          </div>
         ) : (
-          <ul>
-            {selectedEvents.map((event) => (
-              <li key={event.id}>
-                {event.type} @ {event.startTick} ticks
-              </li>
-            ))}
-          </ul>
+          <p>Aucune note sélectionnée.</p>
         )}
       </section>
 
-      <section className="inspector__section">
+      <section className={styles.section}>
+        <h2>Mesure</h2>
+        <p>
+          Signature rythmique : {score.timeSignature.beats}/{score.timeSignature.beatUnit}
+        </p>
+        <p>Armature : {score.keySignature}</p>
+      </section>
+
+      <section className={styles.section}>
         <h2>Import / Export</h2>
         <button type="button" onClick={downloadJson}>
           Export JSON
         </button>
-        <label className="inspector__file">
+        <label className={styles.file}>
           Import JSON
-          <input
-            type="file"
-            accept="application/json"
-            onChange={(event) => handleImport(event.target.files?.[0] ?? null)}
-          />
+          <input type="file" accept="application/json" onChange={(event) => handleImport(event.target.files?.[0] ?? null)} />
         </label>
-        {importError && <p className="inspector__error">{importError}</p>}
+        {importError && <p className={styles.error}>{importError}</p>}
       </section>
     </aside>
   );

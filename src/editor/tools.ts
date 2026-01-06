@@ -1,5 +1,8 @@
 import type { PointerEvent } from "react";
-import type { NoteEvent, ScoreEvent, ToolId } from "../music/types";
+import type { InstrumentDefinition } from "../music/instruments";
+import type { MusicalEvent, ScoreEvent, ToolId } from "../music/types";
+import type { HitTestResult } from "./layout";
+import { mapTabToPitch } from "../music/mapping";
 
 export interface DragState {
   eventId: string;
@@ -16,20 +19,12 @@ export interface SelectionBox {
   endY: number;
 }
 
-export interface HitTestResult {
-  measureIndex: number;
-  tick: number;
-  staffLine: number | null;
-  pitchMidi: number;
-  snappedX: number;
-}
-
 export interface ToolContext {
   event: PointerEvent<SVGSVGElement>;
   pointer: { x: number; y: number };
   eventId: string | null;
   position: HitTestResult;
-  noteEvents: NoteEvent[];
+  noteEvents: MusicalEvent[];
   allEvents: ScoreEvent[];
   dragState: DragState | null;
   selectionBox: SelectionBox | null;
@@ -37,16 +32,22 @@ export interface ToolContext {
   setSelectionBox: (state: SelectionBox | null) => void;
   setSelection: (ids: string[]) => void;
   toggleSelection: (id: string) => void;
-  addNoteAt: (tick: number, pitchMidi: number) => void;
+  addNoteAt: (payload: {
+    tick: number;
+    pitchMidi: number;
+    performanceHints?: { string?: number; fret?: number };
+  }) => void;
   addRestAt: (tick: number) => void;
   removeEvent: (id: string) => void;
   updateEvent: (event: ScoreEvent) => void;
   setCaretTick: (tick: number) => void;
+  activeFret: number;
+  instrument: InstrumentDefinition;
   helpers: {
     tickToX: (tick: number) => number;
-    xToTick: (x: number) => number;
-    pitchToY: (pitch: number) => number;
-    yToPitch: (y: number) => number;
+    xToTick: (x: number, systemIndex: number) => number;
+    pitchToY: (pitch: number, tick: number) => number;
+    yToPitch: (y: number, systemIndex: number) => number;
   };
 }
 
@@ -70,8 +71,25 @@ export const SelectTool: ToolHandler = {
     toggleSelection,
     setDragState,
     setSelectionBox,
+    updateEvent,
+    activeFret,
+    instrument,
   }) => {
     setCaretTick(position.tick);
+    if (position.isTab && position.tabStringIndex !== null && eventId) {
+      const eventToUpdate = allEvents.find((item) => item.id === eventId);
+      if (eventToUpdate?.type === "note") {
+        const pitch = mapTabToPitch(position.tabStringIndex, activeFret, instrument);
+        if (pitch != null) {
+          updateEvent({
+            ...eventToUpdate,
+            pitches: [pitch],
+            performanceHints: { ...eventToUpdate.performanceHints, string: position.tabStringIndex, fret: activeFret },
+          });
+        }
+      }
+    }
+
     if (eventId) {
       if (event.shiftKey) {
         toggleSelection(eventId);
@@ -83,7 +101,7 @@ export const SelectTool: ToolHandler = {
         setDragState({
           eventId,
           originTick: draggedEvent.startTick,
-          originPitch: draggedEvent.pitchMidi,
+          originPitch: draggedEvent.pitches[0] ?? 60,
           startX: pointer.x,
           startY: pointer.y,
         });
@@ -98,19 +116,23 @@ export const SelectTool: ToolHandler = {
       });
     }
   },
-  onPointerMove: ({ dragState, selectionBox, pointer, allEvents, updateEvent, helpers, setSelectionBox }) => {
+  onPointerMove: ({ dragState, selectionBox, pointer, allEvents, updateEvent, helpers, setSelectionBox, position }) => {
     if (dragState) {
       const deltaX = pointer.x - dragState.startX;
       const deltaY = pointer.y - dragState.startY;
-      const deltaTicks = helpers.xToTick(helpers.tickToX(dragState.originTick) + deltaX) - dragState.originTick;
-      const deltaPitch = helpers.yToPitch(helpers.pitchToY(dragState.originPitch) + deltaY) - dragState.originPitch;
+      const deltaTicks =
+        helpers.xToTick(helpers.tickToX(dragState.originTick) + deltaX, position.systemIndex) -
+        dragState.originTick;
+      const deltaPitch =
+        helpers.yToPitch(helpers.pitchToY(dragState.originPitch, dragState.originTick) + deltaY, position.systemIndex) -
+        dragState.originPitch;
 
       const eventToUpdate = allEvents.find((item) => item.id === dragState.eventId);
       if (eventToUpdate && eventToUpdate.type === "note") {
         updateEvent({
           ...eventToUpdate,
           startTick: Math.max(0, dragState.originTick + deltaTicks),
-          pitchMidi: dragState.originPitch + deltaPitch,
+          pitches: eventToUpdate.pitches.map((pitch) => pitch + deltaPitch),
         });
       }
     }
@@ -132,7 +154,7 @@ export const SelectTool: ToolHandler = {
       const selected = noteEvents
         .filter((note) => {
           const x = helpers.tickToX(note.startTick);
-          const y = helpers.pitchToY(note.pitchMidi);
+          const y = helpers.pitchToY(note.pitches[0] ?? 60, note.startTick);
           return x >= left && x <= right && y >= top && y <= bottom;
         })
         .map((note) => note.id);
@@ -145,9 +167,20 @@ export const SelectTool: ToolHandler = {
 
 export const NoteTool: ToolHandler = {
   id: "note",
-  onPointerDown: ({ position, setCaretTick, addNoteAt }) => {
+  onPointerDown: ({ position, setCaretTick, addNoteAt, activeFret, instrument }) => {
     setCaretTick(position.tick);
-    addNoteAt(position.tick, position.pitchMidi);
+    if (position.isTab && position.tabStringIndex !== null) {
+      const pitch = mapTabToPitch(position.tabStringIndex, activeFret, instrument);
+      if (pitch != null) {
+        addNoteAt({
+          tick: position.tick,
+          pitchMidi: pitch,
+          performanceHints: { string: position.tabStringIndex, fret: activeFret },
+        });
+      }
+      return;
+    }
+    addNoteAt({ tick: position.tick, pitchMidi: position.pitchMidi });
   },
   onPointerMove: () => {},
   onPointerUp: () => {},

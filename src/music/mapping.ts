@@ -1,5 +1,5 @@
 import type { InstrumentDefinition } from "./instruments";
-import type { NoteEvent } from "./types";
+import type { MusicalEvent, PerformanceHints } from "./types";
 
 export interface TabPosition {
   strings: number[];
@@ -41,11 +41,7 @@ const scoreCandidate = (
   return candidate.fret + stringPenalty + extremePenalty + distancePenalty;
 };
 
-const getCandidates = (
-  pitchMidi: number,
-  instrument: InstrumentDefinition,
-  context: TabContext
-) => {
+const getCandidates = (pitchMidi: number, instrument: InstrumentDefinition, context: TabContext) => {
   if (!instrument.strings) {
     return [];
   }
@@ -63,12 +59,36 @@ const getCandidates = (
     .sort((a, b) => a.score - b.score || a.fret - b.fret);
 };
 
-export const mapNoteToTab = (
-  note: Pick<NoteEvent, "pitchMidi">,
+export const mapPitchToTab = (pitchMidi: number, instrument: InstrumentDefinition): TabPosition | null => {
+  const context = createTabContext();
+  return mapNoteToTab({ pitches: [pitchMidi] }, instrument, context);
+};
+
+export const mapTabToPitch = (
+  stringIndex: number,
+  fret: number,
+  instrument: InstrumentDefinition
+): number | null => {
+  if (!instrument.strings) {
+    return null;
+  }
+  const openString = instrument.strings[stringIndex];
+  if (openString == null) {
+    return null;
+  }
+  return openString + fret;
+};
+
+const mapNoteToTab = (
+  note: Pick<MusicalEvent, "pitches">,
   instrument: InstrumentDefinition,
   context: TabContext
 ): TabPosition | null => {
-  const candidates = getCandidates(note.pitchMidi, instrument, context);
+  const pitchMidi = note.pitches[0];
+  if (pitchMidi == null) {
+    return null;
+  }
+  const candidates = getCandidates(pitchMidi, instrument, context);
   if (candidates.length === 0) {
     return null;
   }
@@ -78,8 +98,8 @@ export const mapNoteToTab = (
   return { strings: [chosen.stringIndex], frets: [chosen.fret] };
 };
 
-export const mapChordToTab = (
-  notesSameTick: Array<Pick<NoteEvent, "id" | "pitchMidi">>,
+const mapChordToTab = (
+  notesSameTick: Array<Pick<MusicalEvent, "id" | "pitches">>,
   instrument: InstrumentDefinition,
   context: TabContext
 ) => {
@@ -90,21 +110,19 @@ export const mapChordToTab = (
   const maxNotes = Math.min(MAX_CHORD_NOTES, instrument.strings.length);
   const chordNotes =
     notesSameTick.length > maxNotes
-      ? [...notesSameTick].sort((a, b) => b.pitchMidi - a.pitchMidi).slice(0, maxNotes)
+      ? [...notesSameTick]
+          .sort((a, b) => (b.pitches[0] ?? 0) - (a.pitches[0] ?? 0))
+          .slice(0, maxNotes)
       : notesSameTick;
 
   const candidatesByNote = chordNotes.map((note) => ({
     note,
-    candidates: getCandidates(note.pitchMidi, instrument, context).slice(0, 4),
+    candidates: getCandidates(note.pitches[0] ?? 0, instrument, context).slice(0, 4),
   }));
 
   const best = { score: Number.POSITIVE_INFINITY, picks: [] as { noteId: string; candidate: TabCandidate }[] };
 
-  const search = (
-    index: number,
-    usedStrings: Set<number>,
-    picks: { noteId: string; candidate: TabCandidate }[]
-  ) => {
+  const search = (index: number, usedStrings: Set<number>, picks: { noteId: string; candidate: TabCandidate }[]) => {
     if (index === candidatesByNote.length) {
       const frets = picks.map((pick) => pick.candidate.fret);
       const minFret = Math.min(...frets);
@@ -114,8 +132,7 @@ export const mapChordToTab = (
       const movementPenalty = context.mainPosition
         ? Math.abs((minFret + maxFret) / 2 - context.mainPosition.fret) * 0.4
         : 0;
-      const score =
-        picks.reduce((sum, pick) => sum + pick.candidate.score, 0) + spanPenalty + movementPenalty;
+      const score = picks.reduce((sum, pick) => sum + pick.candidate.score, 0) + spanPenalty + movementPenalty;
 
       if (score < best.score) {
         best.score = score;
@@ -164,16 +181,18 @@ export const mapChordToTab = (
   return positions;
 };
 
-export const mapPitchToTab = (
-  pitchMidi: number,
+const resolvePerformanceHints = (
+  hints: PerformanceHints,
   instrument: InstrumentDefinition
 ): TabPosition | null => {
-  const context = createTabContext();
-  return mapNoteToTab({ pitchMidi }, instrument, context);
+  if (instrument.strings && hints.string != null && hints.fret != null) {
+    return { strings: [hints.string], frets: [hints.fret] };
+  }
+  return null;
 };
 
-export const mapNotesToTabPositions = (
-  notes: { id: string; pitchMidi: number; startTick: number }[],
+export const mapEventsToTabPositions = (
+  notes: { id: string; pitches: number[]; startTick: number; performanceHints: PerformanceHints }[],
   instrument: InstrumentDefinition
 ) => {
   if (!instrument.strings) {
@@ -182,7 +201,7 @@ export const mapNotesToTabPositions = (
 
   const positions = new Map<string, TabPosition>();
   const context = createTabContext();
-  const grouped = new Map<number, { id: string; pitchMidi: number; startTick: number }[]>();
+  const grouped = new Map<number, typeof notes>();
 
   notes.forEach((note) => {
     if (!grouped.has(note.startTick)) {
@@ -195,12 +214,33 @@ export const mapNotesToTabPositions = (
   orderedTicks.forEach((tick) => {
     const group = grouped.get(tick) ?? [];
     if (group.length === 1) {
+      const hintPosition = resolvePerformanceHints(group[0].performanceHints, instrument);
+      if (hintPosition) {
+        positions.set(group[0].id, hintPosition);
+        context.mainPosition = { stringIndex: hintPosition.strings[0], fret: hintPosition.frets[0] };
+        return;
+      }
       const mapped = mapNoteToTab(group[0], instrument, context);
       if (mapped) {
         positions.set(group[0].id, mapped);
       }
       return;
     }
+
+    const hintPositions = group.every((note) => resolvePerformanceHints(note.performanceHints, instrument))
+      ? new Map(
+          group.map((note) => [
+            note.id,
+            resolvePerformanceHints(note.performanceHints, instrument) as TabPosition,
+          ])
+        )
+      : null;
+
+    if (hintPositions) {
+      hintPositions.forEach((value, key) => positions.set(key, value));
+      return;
+    }
+
     const chordPositions = mapChordToTab(group, instrument, context);
     chordPositions.forEach((value, key) => {
       positions.set(key, value);

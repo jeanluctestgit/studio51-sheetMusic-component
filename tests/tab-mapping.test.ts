@@ -1,13 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { getInstrumentById } from "../src/music/instruments";
-import { createTabContext, mapChordToTab, mapNoteToTab, mapNotesToTabPositions } from "../src/music/mapping";
+import { mapEventsToTabPositions, mapPitchToTab } from "../src/music/mapping";
 
 describe("tab mapping", () => {
   const guitar = getInstrumentById("guitar-standard");
 
   test("maps a single note to the lowest fret option", () => {
-    const context = createTabContext();
-    const mapped = mapNoteToTab({ pitchMidi: 60 }, guitar, context);
+    const mapped = mapPitchToTab(60, guitar);
 
     expect(mapped).not.toBeNull();
     expect(mapped?.strings[0]).toBe(2);
@@ -15,16 +14,16 @@ describe("tab mapping", () => {
   });
 
   test("maps a C major chord with unique strings and a tight span", () => {
-    const context = createTabContext();
-    const chordNotes = [
-      { id: "c4", pitchMidi: 60 },
-      { id: "e4", pitchMidi: 64 },
-      { id: "g4", pitchMidi: 67 },
-    ];
+    const positions = mapEventsToTabPositions(
+      [
+        { id: "c4", pitches: [60], startTick: 0, performanceHints: {} },
+        { id: "e4", pitches: [64], startTick: 0, performanceHints: {} },
+        { id: "g4", pitches: [67], startTick: 0, performanceHints: {} },
+      ],
+      guitar
+    );
 
-    const positions = mapChordToTab(chordNotes, guitar, context);
     const values = [...positions.values()];
-
     expect(values).toHaveLength(3);
 
     const strings = values.map((pos) => pos.strings[0]);
@@ -36,12 +35,12 @@ describe("tab mapping", () => {
   });
 
   test("groups notes by tick when mapping a sequence", () => {
-    const positions = mapNotesToTabPositions(
+    const positions = mapEventsToTabPositions(
       [
-        { id: "c4", pitchMidi: 60, startTick: 0 },
-        { id: "e4", pitchMidi: 64, startTick: 0 },
-        { id: "g4", pitchMidi: 67, startTick: 0 },
-        { id: "a3", pitchMidi: 57, startTick: 480 },
+        { id: "c4", pitches: [60], startTick: 0, performanceHints: {} },
+        { id: "e4", pitches: [64], startTick: 0, performanceHints: {} },
+        { id: "g4", pitches: [67], startTick: 0, performanceHints: {} },
+        { id: "a3", pitches: [57], startTick: 480, performanceHints: {} },
       ],
       guitar
     );

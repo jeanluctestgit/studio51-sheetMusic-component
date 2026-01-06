@@ -3,26 +3,26 @@ import { useEditorStore } from "../src/state/editorStore";
 import type { Score } from "../src/music/types";
 
 const buildScore = (): Score => ({
-  id: "score-1",
-  title: "Test",
+  id: "score-undo",
+  title: "Undo",
   tempoBpm: 120,
   timeSignature: { beats: 4, beatUnit: 4 },
   keySignature: "C",
   ticksPerWhole: 1024,
   tracks: [
     {
-      id: "track-1",
+      id: "track-undo",
       name: "Generic",
       clef: "treble",
       instrumentId: "generic",
       showTab: false,
       measures: [
         {
-          id: "measure-1",
+          id: "measure-undo",
           index: 0,
           voices: [
             {
-              id: "voice-1",
+              id: "voice-undo",
               events: [],
             },
           ],
@@ -32,20 +32,22 @@ const buildScore = (): Score => ({
   ],
 });
 
-describe("insertion note", () => {
-  test("adds a note event at caret", () => {
+describe("undo/redo", () => {
+  test("undoes and redoes a note insertion", () => {
     const store = useEditorStore.getState();
     store.importScore(buildScore());
     store.setDuration("1/4");
-    store.addNoteAt({ tick: 0, pitchMidi: 64 });
+    store.addNoteAt({ tick: 0, pitchMidi: 60 });
 
-    const updated = useEditorStore.getState().score;
-    const events = updated.tracks[0].measures[0].voices[0].events;
-    expect(events.length).toBe(1);
-    expect(events[0].type).toBe("note");
-    if (events[0].type === "note") {
-      expect(events[0].pitches[0]).toBe(64);
-      expect(events[0].durationTicks).toBe(256);
-    }
+    let events = useEditorStore.getState().score.tracks[0].measures[0].voices[0].events;
+    expect(events).toHaveLength(1);
+
+    store.undo();
+    events = useEditorStore.getState().score.tracks[0].measures[0].voices[0].events;
+    expect(events).toHaveLength(0);
+
+    store.redo();
+    events = useEditorStore.getState().score.tracks[0].measures[0].voices[0].events;
+    expect(events).toHaveLength(1);
   });
 });

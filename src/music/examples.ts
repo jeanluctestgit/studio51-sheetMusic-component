@@ -1,18 +1,19 @@
-import type { NoteEvent } from "./types";
+import type { MusicalEvent } from "./types";
 
 export const buildExampleEvents = (createId: () => string, ticksPerWhole: number) => {
   const quarter = ticksPerWhole / 4;
   const sixteenth = ticksPerWhole / 16;
 
-  const makeNote = (startTick: number, pitchMidi: number, durationTicks: number): NoteEvent => ({
+  const makeNote = (startTick: number, pitchMidi: number, durationTicks: number): MusicalEvent => ({
     id: createId(),
     type: "note",
     startTick,
     durationTicks,
-    pitchMidi,
+    pitches: [pitchMidi],
     articulations: [],
     ornaments: [],
     effects: [],
+    performanceHints: {},
   });
 
   const cMajorChord = [
@@ -21,9 +22,9 @@ export const buildExampleEvents = (createId: () => string, ticksPerWhole: number
     makeNote(0, 67, quarter),
   ];
 
-  const cMajorScale = [
-    60, 62, 64, 65, 67, 69, 71, 72,
-  ].map((pitch, index) => makeNote(quarter + index * sixteenth, pitch, sixteenth));
+  const cMajorScale = [60, 62, 64, 65, 67, 69, 71, 72].map((pitch, index) =>
+    makeNote(quarter + index * sixteenth, pitch, sixteenth)
+  );
 
   const melodyStart = ticksPerWhole;
   const simpleMelody = [

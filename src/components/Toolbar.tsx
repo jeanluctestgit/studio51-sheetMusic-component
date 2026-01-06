@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { useEditorStore } from "../editor/store";
+import { useEditorStore } from "../state/editorStore";
 import { INSTRUMENTS, getInstrumentById } from "../music/instruments";
 import type { Articulation, Effect, KeySignature, Ornament, ToolId } from "../music/types";
 import { SCALES } from "../music/scales";
+import styles from "../styles/Toolbar.module.css";
 
 const TOOLS: { id: ToolId; label: string }[] = [
   { id: "select", label: "Sélection" },
@@ -52,6 +53,21 @@ const TIME_SIGNATURES = [
 
 const KEY_SIGNATURES: KeySignature[] = ["C", "G", "D", "A", "E", "F", "Bb", "Eb"];
 
+const SCALE_ROOTS = [
+  { label: "C", midi: 60 },
+  { label: "C#", midi: 61 },
+  { label: "D", midi: 62 },
+  { label: "D#", midi: 63 },
+  { label: "E", midi: 64 },
+  { label: "F", midi: 65 },
+  { label: "F#", midi: 66 },
+  { label: "G", midi: 67 },
+  { label: "G#", midi: 68 },
+  { label: "A", midi: 69 },
+  { label: "A#", midi: 70 },
+  { label: "B", midi: 71 },
+];
+
 export const Toolbar = () => {
   const {
     activeTool,
@@ -76,6 +92,14 @@ export const Toolbar = () => {
     caretTick,
     activeScaleId,
     setScale,
+    scaleRootMidi,
+    setScaleRoot,
+    activeFret,
+    setActiveFret,
+    isPlaying,
+    play,
+    stop,
+    setTempoBpm,
   } = useEditorStore();
 
   const [chordInput, setChordInput] = useState("");
@@ -90,15 +114,34 @@ export const Toolbar = () => {
   );
 
   return (
-    <aside className="toolbar">
-      <section className="toolbar__section">
-        <p className="toolbar__title">Outils</p>
-        <div className="toolbar__grid">
+    <aside className={styles.toolbar}>
+      <section className={styles.section}>
+        <p className={styles.title}>Transport</p>
+        <div className={styles.row}>
+          <button type="button" className={styles.button} onClick={() => (isPlaying ? stop() : play())}>
+            {isPlaying ? "Stop" : "Play"}
+          </button>
+          <label className={styles.label}>
+            Tempo
+            <input
+              type="number"
+              min={40}
+              max={240}
+              value={score.tempoBpm}
+              onChange={(event) => setTempoBpm(Number(event.target.value))}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className={styles.section}>
+        <p className={styles.title}>Outils</p>
+        <div className={styles.grid}>
           {TOOLS.map((tool) => (
             <button
               key={tool.id}
               type="button"
-              className={`toolbar__button ${activeTool === tool.id ? "is-active" : ""}`}
+              className={`${styles.button} ${activeTool === tool.id ? styles.buttonActive : ""}`}
               onClick={() => setTool(tool.id)}
             >
               {tool.label}
@@ -107,31 +150,31 @@ export const Toolbar = () => {
         </div>
       </section>
 
-      <section className="toolbar__section">
-        <p className="toolbar__title">Durée</p>
-        <div className="toolbar__grid">
+      <section className={styles.section}>
+        <p className={styles.title}>Durée</p>
+        <div className={styles.grid}>
           {DURATIONS.map((item) => (
             <button
               key={item.value}
               type="button"
-              className={`toolbar__button ${duration === item.value ? "is-active" : ""}`}
+              className={`${styles.button} ${duration === item.value ? styles.buttonActive : ""}`}
               onClick={() => setDuration(item.value)}
             >
               {item.label}
             </button>
           ))}
         </div>
-        <div className="toolbar__grid">
+        <div className={styles.grid}>
           <button
             type="button"
-            className={`toolbar__button toolbar__button--small ${dotted ? "is-active" : ""}`}
+            className={`${styles.button} ${styles.buttonSmall} ${dotted ? styles.buttonActive : ""}`}
             onClick={toggleDotted}
           >
             Pointé
           </button>
           <button
             type="button"
-            className={`toolbar__button toolbar__button--small ${triplet ? "is-active" : ""}`}
+            className={`${styles.button} ${styles.buttonSmall} ${triplet ? styles.buttonActive : ""}`}
             onClick={toggleTriplet}
           >
             Triolet
@@ -139,10 +182,10 @@ export const Toolbar = () => {
         </div>
       </section>
 
-      <section className="toolbar__section">
-        <p className="toolbar__title">Signature</p>
-        <div className="toolbar__row">
-          <label className="toolbar__label">
+      <section className={styles.section}>
+        <p className={styles.title}>Signature</p>
+        <div className={styles.row}>
+          <label className={styles.label}>
             Armature
             <select
               value={score.keySignature}
@@ -155,7 +198,7 @@ export const Toolbar = () => {
               ))}
             </select>
           </label>
-          <label className="toolbar__label">
+          <label className={styles.label}>
             Rythme
             <select
               value={timeSignatureLabel}
@@ -176,15 +219,15 @@ export const Toolbar = () => {
         </div>
       </section>
 
-      <section className="toolbar__section">
-        <p className="toolbar__title">Articulations</p>
-        <div className="toolbar__grid">
+      <section className={styles.section}>
+        <p className={styles.title}>Articulations</p>
+        <div className={styles.grid}>
           {ARTICULATIONS.map((item) => (
             <button
               key={item.value}
               type="button"
-              className={`toolbar__button toolbar__button--small ${
-                activeArticulations.includes(item.value) ? "is-active" : ""
+              className={`${styles.button} ${styles.buttonSmall} ${
+                activeArticulations.includes(item.value) ? styles.buttonActive : ""
               }`}
               onClick={() => toggleArticulation(item.value)}
             >
@@ -194,15 +237,15 @@ export const Toolbar = () => {
         </div>
       </section>
 
-      <section className="toolbar__section">
-        <p className="toolbar__title">Ornements</p>
-        <div className="toolbar__grid">
+      <section className={styles.section}>
+        <p className={styles.title}>Ornements</p>
+        <div className={styles.grid}>
           {ORNAMENTS.map((item) => (
             <button
               key={item.value}
               type="button"
-              className={`toolbar__button toolbar__button--small ${
-                activeOrnaments.includes(item.value) ? "is-active" : ""
+              className={`${styles.button} ${styles.buttonSmall} ${
+                activeOrnaments.includes(item.value) ? styles.buttonActive : ""
               }`}
               onClick={() => toggleOrnament(item.value)}
             >
@@ -213,15 +256,15 @@ export const Toolbar = () => {
       </section>
 
       {showGuitar && (
-        <section className="toolbar__section">
-          <p className="toolbar__title">Effets guitare</p>
-          <div className="toolbar__grid">
+        <section className={styles.section}>
+          <p className={styles.title}>Effets guitare</p>
+          <div className={styles.grid}>
             {GUITAR_EFFECTS.map((item) => (
               <button
                 key={item.value}
                 type="button"
-                className={`toolbar__button toolbar__button--small ${
-                  activeEffects.includes(item.value) ? "is-active" : ""
+                className={`${styles.button} ${styles.buttonSmall} ${
+                  activeEffects.includes(item.value) ? styles.buttonActive : ""
                 }`}
                 onClick={() => toggleEffect(item.value)}
               >
@@ -229,12 +272,22 @@ export const Toolbar = () => {
               </button>
             ))}
           </div>
+          <label className={styles.label}>
+            Fret actif
+            <input
+              type="number"
+              min={0}
+              max={24}
+              value={activeFret}
+              onChange={(event) => setActiveFret(Number(event.target.value))}
+            />
+          </label>
         </section>
       )}
 
-      <section className="toolbar__section">
-        <p className="toolbar__title">Accords</p>
-        <div className="toolbar__row">
+      <section className={styles.section}>
+        <p className={styles.title}>Accords</p>
+        <div className={styles.row}>
           <input
             type="text"
             placeholder="Cmaj7"
@@ -243,7 +296,7 @@ export const Toolbar = () => {
           />
           <button
             type="button"
-            className="toolbar__button toolbar__button--small"
+            className={`${styles.button} ${styles.buttonSmall}`}
             onClick={() => {
               addChordSymbol(caretTick, chordInput.trim());
               setChordInput("");
@@ -254,13 +307,10 @@ export const Toolbar = () => {
         </div>
       </section>
 
-      <section className="toolbar__section">
-        <p className="toolbar__title">Gamme</p>
-        <div className="toolbar__row">
-          <select
-            value={activeScaleId ?? ""}
-            onChange={(event) => setScale(event.target.value || null)}
-          >
+      <section className={styles.section}>
+        <p className={styles.title}>Gamme</p>
+        <div className={styles.row}>
+          <select value={activeScaleId ?? ""} onChange={(event) => setScale(event.target.value || null)}>
             <option value="">Aucune</option>
             {SCALES.map((scale) => (
               <option key={scale.id} value={scale.id}>
@@ -268,12 +318,19 @@ export const Toolbar = () => {
               </option>
             ))}
           </select>
+          <select value={scaleRootMidi} onChange={(event) => setScaleRoot(Number(event.target.value))}>
+            {SCALE_ROOTS.map((root) => (
+              <option key={root.label} value={root.midi}>
+                {root.label}
+              </option>
+            ))}
+          </select>
         </div>
       </section>
 
-      <section className="toolbar__section">
-        <p className="toolbar__title">Piste</p>
-        <div className="toolbar__row">
+      <section className={styles.section}>
+        <p className={styles.title}>Piste</p>
+        <div className={styles.row}>
           <select value={track.instrumentId ?? "generic"} disabled>
             {INSTRUMENTS.map((inst) => (
               <option key={inst.id} value={inst.id}>

@@ -1,0 +1,38 @@
+.app {
+  min-height: 100vh;
+  padding: 32px 32px 48px;
+  display: grid;
+  gap: 28px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.75rem;
+  margin: 0 0 8px;
+  color: #9aa0b2;
+  font-weight: 600;
+}
+
+.subtitle {
+  max-width: 640px;
+  margin: 12px 0 0;
+  color: #c9ccd8;
+}
+
+.badge {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 0.85rem;
+  font-weight: 600;
+}

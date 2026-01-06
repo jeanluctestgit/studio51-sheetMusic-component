@@ -1,25 +1,20 @@
 import { describe, expect, test } from "vitest";
-import { useEditorStore } from "../src/state/editorStore";
+import { useScoreStore } from "../src/store/scoreStore";
 import type { Score } from "../src/music/types";
 
 const buildScore = (): Score => ({
   id: "score-1",
   title: "Test",
-  tempoBpm: 120,
-  timeSignature: { beats: 4, beatUnit: 4 },
-  keySignature: "C",
-  ticksPerWhole: 1024,
+  ticksPerQuarter: 480,
   tracks: [
     {
       id: "track-1",
       name: "Generic",
-      clef: "treble",
-      instrumentId: "generic",
-      showTab: false,
+      instrumentId: "guitar",
       measures: [
         {
           id: "measure-1",
-          index: 0,
+          timeSignature: { beats: 4, beatUnit: 4 },
           voices: [
             {
               id: "voice-1",
@@ -32,20 +27,21 @@ const buildScore = (): Score => ({
   ],
 });
 
-describe("insertion note", () => {
+describe("note insertion", () => {
   test("adds a note event at caret", () => {
-    const store = useEditorStore.getState();
+    const store = useScoreStore.getState();
     store.importScore(buildScore());
-    store.setDuration("1/4");
-    store.addNoteAt({ tick: 0, pitchMidi: 64 });
+    store.setCaret(0, 64);
+    store.setActiveDurationTicks(480);
+    store.insertNoteAtCaret();
 
-    const updated = useEditorStore.getState().score;
+    const updated = useScoreStore.getState().score;
     const events = updated.tracks[0].measures[0].voices[0].events;
     expect(events.length).toBe(1);
     expect(events[0].type).toBe("note");
     if (events[0].type === "note") {
-      expect(events[0].pitches[0]).toBe(64);
-      expect(events[0].durationTicks).toBe(256);
+      expect(events[0].pitchMidi).toBe(64);
+      expect(events[0].durationTicks).toBe(480);
     }
   });
 });

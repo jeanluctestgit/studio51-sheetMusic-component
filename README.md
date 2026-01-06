@@ -1,8 +1,8 @@
-# Studio51 Sheet Music Component
+# StaffFirst Editor
 
-MVP React + Vite pour un éditeur de partitions et tablatures type Guitar Pro 8.
+Minimal Guitar Pro–style **staff-first** SVG editor built with React 18, TypeScript, Vite, Zustand, TailwindCSS, and Vitest.
 
-## Démarrer
+## Quick start
 
 ```bash
 npm install
@@ -19,63 +19,43 @@ npm run test
 
 ```
 src/
-  music/            modèle musical, instruments, mapping pitch ↔ tab
-  editor/           layout multi-systèmes, outils, hit tests
-  svg/              rendu SVG (portée, tablature, overlays)
-  components/       UI (Toolbar, Inspector, Viewport)
-  playback/         audio engine Web Audio
-  state/            store Zustand + commandes undoables
-  utils/            utilitaires (id, etc.)
+ ├─ main.tsx
+ ├─ App.tsx
+ ├─ store/scoreStore.ts
+ ├─ music/
+ │   ├─ types.ts
+ │   ├─ mapping.ts
+ │   └─ pitchUtils.ts
+ ├─ editor/
+ │   ├─ tools/NoteTool.ts
+ │   ├─ tools/SelectTool.ts
+ │   ├─ tools/EraseTool.ts
+ │   └─ hitTest.ts
+ ├─ svg/
+ │   ├─ Staff.tsx
+ │   ├─ NoteHead.tsx
+ │   ├─ TabNumber.tsx
+ │   └─ Caret.tsx
+ └─ components/
+     ├─ Toolbar.tsx
+     ├─ Viewport.tsx
+     └─ Inspector.tsx
 ```
 
-### Choix du styling
+## Adding a new instrument mapping
 
-Le MVP utilise **CSS Modules** pour isoler les styles des composants (Toolbar, Inspector, layout),
-avec un fichier global minimal pour les styles SVG partagés.
+1. Open `src/music/mapping.ts`.
+2. Add a new `InstrumentDefinition` to `INSTRUMENTS` with the desired open-string MIDI pitches.
+3. The tablature renderer (`src/components/Viewport.tsx`) uses `mapPitchToTab` to derive string/fret from pitch.
 
-## Modèle musical
+## Adding a new tool
 
-Le coeur est un `MusicalEvent` (dans `src/music/types.ts`) :
+1. Create a tool module in `src/editor/tools/` (see `NoteTool.ts`, `SelectTool.ts`).
+2. Export a tool object with an `onPointerDown` handler.
+3. Register the tool in `src/components/Viewport.tsx` (`toolMap`) and add a toolbar button in `src/components/Toolbar.tsx`.
 
-- `pitches[]` : source de vérité musicale (MIDI)
-- `durationTicks`, `startTick`
-- `articulations`, `ornaments`, `effects`
-- `performanceHints` (string, fret, position, fingering)
+## Notes
 
-La tablature est une **vue dérivée** : si des `performanceHints` sont présents, ils sont utilisés,
-sinon un mapping automatique choisit la corde + fret la plus ergonomique.
-
-## Ajouter un nouvel outil
-
-1. Déclarer l’outil dans `src/music/types.ts` (`ToolId`).
-2. Ajouter le bouton correspondant dans `src/components/Toolbar.tsx`.
-3. Implémenter l’action dans `src/editor/tools.ts` :
-   - gérer `onPointerDown` / `onPointerMove` / `onPointerUp`
-   - appeler les actions du store (`addNoteAt`, `updateEvent`, etc.)
-4. (Optionnel) Ajouter un raccourci clavier dans `src/components/EditorView.tsx`.
-
-## Ajouter un instrument (mapping tablature)
-
-1. Ouvrir `src/music/instruments.ts`.
-2. Ajouter une entrée `InstrumentDefinition` avec :
-   - `id` unique
-   - `name`
-   - `category` (ex: `guitar`, `bass`, `ukulele`)
-   - `clef`
-   - `strings`: liste des MIDI des cordes (grave → aigu)
-3. Le mapping utilise `mapEventsToTabPositions` (`src/music/mapping.ts`) qui choisit
-   la corde avec le plus petit fret possible (0–24), sauf si `performanceHints` est présent.
-
-## Limites du MVP
-
-- Pas de rendu de ligatures complexes (beams avancés, tuplets graphiques détaillés).
-- Chords symboliques seulement (pas de diagrammes).
-- Le playback utilise un oscillateur simple (pas de soundfonts).
-- Le layout multi-systèmes est un auto-break basique (pas de justification horizontale complète).
-
-## Build
-
-```bash
-npm run build
-npm run preview
-```
+- The score is the source of truth. Tablature is derived from pitch via the mapping engine.
+- The editor persists the score in `localStorage` and provides JSON import/export in the Inspector panel.
+- Caret blinking is driven via `requestAnimationFrame` for smooth animation.

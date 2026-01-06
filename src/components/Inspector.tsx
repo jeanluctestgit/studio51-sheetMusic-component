@@ -1,224 +1,97 @@
 import { useMemo, useState } from "react";
-import { useEditorStore } from "../state/editorStore";
-import { getInstrumentById, INSTRUMENTS } from "../music/instruments";
-import type { MusicalEvent, Score } from "../music/types";
-import { mapTabToPitch } from "../music/mapping";
-import styles from "../styles/Inspector.module.css";
-
-const stringifyPitches = (pitches: number[]) => pitches.join(", ");
+import { useScoreStore } from "../store/scoreStore";
+import { INSTRUMENTS } from "../music/mapping";
 
 export const Inspector = () => {
   const {
+    selection,
+    getEventById,
     score,
-    selectedTrackId,
-    selectedEventIds,
-    setTrackInstrument,
-    toggleTrackTab,
+    setInstrument,
+    exportScore,
     importScore,
-    updateEvent,
-  } = useEditorStore();
-  const [importError, setImportError] = useState<string | null>(null);
+  } = useScoreStore();
+  const [jsonDraft, setJsonDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  const track = score.tracks.find((item) => item.id === selectedTrackId) ?? score.tracks[0];
-  const instrument = getInstrumentById(track.instrumentId);
+  const selectedEvent = useMemo(() => {
+    const id = selection[0];
+    return id ? getEventById(id) : undefined;
+  }, [getEventById, selection]);
 
-  const selectedEvents = useMemo(() => {
-    return track.measures.flatMap((measure) =>
-      measure.voices.flatMap((voice) => voice.events.filter((event) => selectedEventIds.includes(event.id)))
-    );
-  }, [track, selectedEventIds]);
-
-  const selectedNote = selectedEvents.find((event) => event.type === "note") as MusicalEvent | undefined;
-
-  const downloadJson = () => {
-    const blob = new Blob([JSON.stringify(score, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "score.json";
-    anchor.click();
-    URL.revokeObjectURL(url);
+  const handleExport = () => {
+    setJsonDraft(exportScore());
+    setError(null);
   };
 
-  const handleImport = (file: File | null) => {
-    if (!file) {
-      return;
+  const handleImport = () => {
+    try {
+      const parsed = JSON.parse(jsonDraft);
+      importScore(parsed);
+      setError(null);
+    } catch {
+      setError("Invalid JSON payload.");
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = JSON.parse(reader.result as string) as Score;
-        importScore(parsed);
-        setImportError(null);
-      } catch (error) {
-        setImportError("Fichier JSON invalide.");
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handlePitchChange = (value: string) => {
-    if (!selectedNote) {
-      return;
-    }
-    const pitch = Number(value);
-    if (Number.isNaN(pitch)) {
-      return;
-    }
-    updateEvent({
-      ...selectedNote,
-      pitches: [pitch],
-      performanceHints: {
-        ...selectedNote.performanceHints,
-      },
-    });
-  };
-
-  const handleDurationChange = (value: string) => {
-    if (!selectedNote) {
-      return;
-    }
-    const durationTicks = Number(value);
-    if (Number.isNaN(durationTicks)) {
-      return;
-    }
-    updateEvent({
-      ...selectedNote,
-      durationTicks: Math.max(1, durationTicks),
-    });
-  };
-
-  const handleStringFretChange = (stringValue: string, fretValue: string) => {
-    if (!selectedNote || !instrument.strings) {
-      return;
-    }
-    const stringIndex = Number(stringValue);
-    const fret = Number(fretValue);
-    if (Number.isNaN(stringIndex) || Number.isNaN(fret)) {
-      return;
-    }
-    const pitch = mapTabToPitch(stringIndex, fret, instrument);
-    if (pitch == null) {
-      return;
-    }
-    updateEvent({
-      ...selectedNote,
-      pitches: [pitch],
-      performanceHints: {
-        ...selectedNote.performanceHints,
-        string: stringIndex,
-        fret,
-      },
-    });
   };
 
   return (
-    <aside className={styles.inspector}>
-      <section className={styles.section}>
-        <h2>Piste active</h2>
-        <label>
-          Instrument
-          <select
-            value={track.instrumentId ?? "generic"}
-            onChange={(event) => setTrackInstrument(track.id, event.target.value)}
+    <aside className="flex h-full flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm">
+      <div>
+        <h2 className="text-xs uppercase tracking-[0.3em] text-slate-500">Inspector</h2>
+        <div className="mt-3 space-y-2 text-sm">
+          <p className="text-slate-300">
+            Selection: <span className="font-semibold text-slate-100">{selection.length}</span>
+          </p>
+          {selectedEvent && (
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs">
+              <p className="text-slate-400">{selectedEvent.type.toUpperCase()}</p>
+              <p>Start: {selectedEvent.startTick} ticks</p>
+              <p>Duration: {selectedEvent.durationTicks} ticks</p>
+              {selectedEvent.type === "note" && <p>Pitch: MIDI {selectedEvent.pitchMidi}</p>}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="space-y-2">
+        <h3 className="text-xs uppercase tracking-[0.3em] text-slate-500">Instrument</h3>
+        <select
+          value={score.tracks[0].instrumentId}
+          onChange={(event) => setInstrument(event.target.value)}
+          className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm"
+        >
+          {Object.values(INSTRUMENTS).map((instrument) => (
+            <option key={instrument.id} value={instrument.id}>
+              {instrument.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="space-y-3">
+        <h3 className="text-xs uppercase tracking-[0.3em] text-slate-500">Score JSON</h3>
+        <textarea
+          value={jsonDraft}
+          onChange={(event) => setJsonDraft(event.target.value)}
+          placeholder="Export to edit or paste JSON to import."
+          className="min-h-[160px] w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200"
+        />
+        {error && <p className="text-xs text-rose-400">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleExport}
+            className="flex-1 rounded-lg bg-sky-500/20 px-3 py-2 text-xs font-semibold text-sky-200"
           >
-            {INSTRUMENTS.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {instrument.strings && (
-          <label className={styles.toggle}>
-            <input type="checkbox" checked={track.showTab} onChange={() => toggleTrackTab(track.id)} />
-            Afficher la tablature
-          </label>
-        )}
-      </section>
-
-      <section className={styles.section}>
-        <h2>Note sélectionnée</h2>
-        {selectedNote ? (
-          <div className={styles.grid}>
-            <label>
-              Pitch (MIDI)
-              <input
-                type="number"
-                value={selectedNote.pitches[0] ?? 60}
-                onChange={(event) => handlePitchChange(event.target.value)}
-              />
-            </label>
-            <label>
-              Durée (ticks)
-              <input
-                type="number"
-                value={selectedNote.durationTicks}
-                onChange={(event) => handleDurationChange(event.target.value)}
-              />
-            </label>
-            <label>
-              Pitches
-              <input type="text" value={stringifyPitches(selectedNote.pitches)} readOnly />
-            </label>
-            {instrument.strings && (
-              <label>
-                String / Fret
-                <div className={styles.row}>
-                  <input
-                    type="number"
-                    min={0}
-                    max={(instrument.strings?.length ?? 1) - 1}
-                    value={selectedNote.performanceHints.string ?? 0}
-                    onChange={(event) =>
-                      handleStringFretChange(event.target.value, String(selectedNote.performanceHints.fret ?? 0))
-                    }
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    max={24}
-                    value={selectedNote.performanceHints.fret ?? 0}
-                    onChange={(event) =>
-                      handleStringFretChange(String(selectedNote.performanceHints.string ?? 0), event.target.value)
-                    }
-                  />
-                </div>
-              </label>
-            )}
-            <label>
-              Articulations
-              <span>{selectedNote.articulations.join(", ") || "Aucune"}</span>
-            </label>
-            <label>
-              Effets
-              <span>{selectedNote.effects.join(", ") || "Aucun"}</span>
-            </label>
-          </div>
-        ) : (
-          <p>Aucune note sélectionnée.</p>
-        )}
-      </section>
-
-      <section className={styles.section}>
-        <h2>Mesure</h2>
-        <p>
-          Signature rythmique : {score.timeSignature.beats}/{score.timeSignature.beatUnit}
-        </p>
-        <p>Armature : {score.keySignature}</p>
-      </section>
-
-      <section className={styles.section}>
-        <h2>Import / Export</h2>
-        <button type="button" onClick={downloadJson}>
-          Export JSON
-        </button>
-        <label className={styles.file}>
-          Import JSON
-          <input type="file" accept="application/json" onChange={(event) => handleImport(event.target.files?.[0] ?? null)} />
-        </label>
-        {importError && <p className={styles.error}>{importError}</p>}
-      </section>
+            Export JSON
+          </button>
+          <button
+            type="button"
+            onClick={handleImport}
+            className="flex-1 rounded-lg bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-200"
+          >
+            Import JSON
+          </button>
+        </div>
+      </div>
     </aside>
   );
 };

@@ -1,120 +1,78 @@
-export type Clef = "treble" | "bass";
+export type DurationTicks = number;
 
-export type DurationValue = "1/1" | "1/2" | "1/4" | "1/8" | "1/16" | "1/32";
-
-export type ToolId = "select" | "note" | "rest" | "erase";
-
-export type Articulation = "staccato" | "accent" | "tenuto" | "slur" | "tie";
-
-export type Ornament = "trill" | "mordent";
-
-export type Effect =
-  | "slide"
-  | "hammer-on"
-  | "pull-off"
-  | "bend"
-  | "vibrato"
-  | "palm-mute"
-  | "let-ring"
-  | "harmonic";
-
-export interface TimeSignature {
+export type TimeSignature = {
   beats: number;
   beatUnit: number;
-}
+};
 
-export type KeySignature =
-  | "C"
-  | "G"
-  | "D"
-  | "A"
-  | "E"
-  | "B"
-  | "F#"
-  | "C#"
-  | "F"
-  | "Bb"
-  | "Eb"
-  | "Ab"
-  | "Db"
-  | "Gb"
-  | "Cb";
+export type KeySignature = {
+  key: string;
+};
 
-export interface PerformanceHints {
-  string?: number;
-  fret?: number;
-  position?: number;
-  fingering?: string;
-}
-
-export interface Score {
-  id: string;
-  title: string;
-  tempoBpm: number;
-  timeSignature: TimeSignature;
-  keySignature: KeySignature;
-  ticksPerWhole: number;
-  tracks: Track[];
-}
-
-export interface Track {
-  id: string;
-  name: string;
-  clef: Clef;
-  instrumentId: string | null;
-  showTab: boolean;
-  measures: Measure[];
-}
-
-export interface Measure {
-  id: string;
-  index: number;
-  voices: Voice[];
-}
-
-export interface Voice {
-  id: string;
-  events: ScoreEvent[];
-}
-
-export type ScoreEvent =
-  | MusicalEvent
-  | RestEvent
-  | ChordSymbolEvent
-  | TimeSigChangeEvent
-  | KeySigChangeEvent;
-
-export interface BaseEvent {
+export type BaseEvent = {
   id: string;
   startTick: number;
-}
+  durationTicks: DurationTicks;
+};
 
-export interface MusicalEvent extends BaseEvent {
+export type NoteEvent = BaseEvent & {
   type: "note";
-  pitches: number[];
-  durationTicks: number;
-  articulations: Articulation[];
-  ornaments: Ornament[];
-  effects: Effect[];
-  performanceHints: PerformanceHints;
-}
+  pitchMidi: number;
+  accidental?: "sharp" | "flat" | "natural";
+  tie?: boolean;
+  articulations: string[];
+  effects: string[];
+};
 
-export interface RestEvent extends BaseEvent {
+export type RestEvent = BaseEvent & {
   type: "rest";
-  durationTicks: number;
-}
+};
 
-export interface ChordSymbolEvent extends BaseEvent {
-  type: "chord";
+export type ChordSymbolEvent = BaseEvent & {
+  type: "chordSymbol";
   symbol: string;
-}
+};
 
-export interface TimeSigChangeEvent extends BaseEvent {
-  type: "timeSig";
+export type TimeSigChange = BaseEvent & {
+  type: "timeSigChange";
   timeSignature: TimeSignature;
-}
+};
 
-export interface KeySigChangeEvent extends BaseEvent {
-  type: "keySig";
+export type KeySigChange = BaseEvent & {
+  type: "keySigChange";
   keySignature: KeySignature;
-}
+};
+
+export type ScoreEvent =
+  | NoteEvent
+  | RestEvent
+  | ChordSymbolEvent
+  | TimeSigChange
+  | KeySigChange;
+
+export type Voice = {
+  id: string;
+  events: ScoreEvent[];
+};
+
+export type Measure = {
+  id: string;
+  timeSignature: TimeSignature;
+  voices: Voice[];
+};
+
+export type Track = {
+  id: string;
+  name: string;
+  instrumentId: string;
+  measures: Measure[];
+};
+
+export type Score = {
+  id: string;
+  title: string;
+  ticksPerQuarter: number;
+  tracks: Track[];
+};
+
+export type ToolId = "select" | "note" | "rest" | "erase";

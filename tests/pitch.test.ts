@@ -1,23 +1,18 @@
 import { describe, expect, test } from "vitest";
-import { createLayoutHelpers, DEFAULT_LAYOUT } from "../src/editor/layout";
+import { pitchToY, yToPitch } from "../src/music/pitchUtils";
 
-const helpers = createLayoutHelpers(
-  DEFAULT_LAYOUT,
-  { beats: 4, beatUnit: 4 },
-  1024,
-  "treble"
-);
+const staffBottom = 40 + 12 * 4;
 
-describe("pitch/staff mapping", () => {
+describe("pitch ↔ y mapping", () => {
   test("maps E4 to bottom line and back", () => {
-    const y = helpers.pitchToY(64);
-    const midi = helpers.yToPitch(y);
+    const y = pitchToY(64, staffBottom);
+    const midi = yToPitch(y, staffBottom);
     expect(midi).toBe(64);
   });
 
   test("maps C5 to higher position", () => {
-    const y = helpers.pitchToY(72);
-    const midi = helpers.yToPitch(y);
+    const y = pitchToY(72, staffBottom);
+    const midi = yToPitch(y, staffBottom);
     expect(midi).toBe(72);
   });
 });
